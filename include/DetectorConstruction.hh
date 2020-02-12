@@ -23,8 +23,6 @@ class DetectorConstruction : public G4VUserDetectorConstruction
   ~DetectorConstruction();
 
   G4VPhysicalVolume* Construct();
-  G4VPhysicalVolume* BarConstruction(G4Material* Pscint,G4LogicalVolume* expHall_log,G4Material* Glass);
-  G4VPhysicalVolume* FingerConstruction(G4Material* Pscint,G4LogicalVolume* expHall_log,G4Material* Glass);
 
   void UpdateGeometry();
 
