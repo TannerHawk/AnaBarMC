@@ -182,7 +182,7 @@ void GenerateOneElectron()
   //fVx = fRand->Uniform(-4.5 , 4.5 );
   //fVy = 5.0;
   //fVz = fRand->Uniform( -9.5 , 2.5 );
-  fVx = fRand->Uniform(-10.0 , 10.0 );
+  fVx = fRand->Uniform(-30.0, 30.0);
   fVy = 5.0;
   fVz = fRand->Uniform( -12 , 2.5 );
 

@@ -22,6 +22,7 @@ class DetectorConstruction : public G4VUserDetectorConstruction
   DetectorConstruction();
   ~DetectorConstruction();
 
+  G4Material* Materials();
   G4VPhysicalVolume* Construct();
 
   void UpdateGeometry();
@@ -94,6 +95,7 @@ class DetectorConstruction : public G4VUserDetectorConstruction
   G4double           fTumourHeight;
   G4double           fAnaBarXpos;
 
+  G4int		     fNumberOfBars;
   G4int		     fNumberOfLayers;
   G4double           fAnaBarLength;
   G4double           fAnaBarWidth;
