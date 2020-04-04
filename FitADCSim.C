@@ -21,6 +21,7 @@
 #include "TText.h"
 #include "TTree.h"
 #include "TGraph.h"
+#include "TGraphErrors.h"
 #include "TMath.h"
 #include "TRandom3.h"
 

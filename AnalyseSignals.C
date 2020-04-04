@@ -15,22 +15,29 @@
 using namespace std;
 
 static const int MaxHits = 50000;
-static const int MaxPMTNo = 20;
 static const int MaxPMTHits = 5000;
 static const Float_t Finger_Edep_Max = 10.0;
 static const Float_t AnaBar_Edep_Max = 10.0;
 static const Float_t pedastel_sigma = 2.9;
 static const Int_t Detector_Offset = 0;
+static const Int_t Finger_Offset = 2560;
 //static const Int_t Finger_NPhotons_Max = 150;
 //static const Int_t AnaBar_NPhotons_Max = 100;
 static const Int_t Finger_NPhotons_Max = 250;
 static const Int_t AnaBar_NPhotons_Max = 200;
 
 static const Int_t NUMPADDLE = 14;
+static const Int_t NUMBAR    = 14;
+static const Int_t NUMMODULE = 1;
+static const Int_t NUMSIDE   = 1;
+static const Int_t NUMPLANE  = 1;
+static const int MaxPMTNo = 196;
 
+// This was put in each method so I moved it up here
+  const int NMaxPMT=MaxPMTNo;
 //Change this for analysing different primary particles 
 //e- = 11    mu- = 13   
-static const int PrimaryParticleID = 11;
+static const int PrimaryParticleID = 13;
 
 //-----------------------------------------------------
 
@@ -88,20 +95,42 @@ void AnalyseSignals(Int_t Analysis_Run_Number = 8888) {
 //**************************************************************************//
 }
 
+Int_t getDetectorID(Int_t iLayer, Int_t iBar, Int_t iModule, Int_t iSide, Int_t iPlane){
+  Int_t fDetectorID = 0;
+  fDetectorID = fDetectorID + iLayer;
+  fDetectorID = fDetectorID + iBar*NUMPADDLE; 
+  fDetectorID = fDetectorID + iModule*NUMBAR;
+  fDetectorID = fDetectorID + iSide*NUMMODULE;
+  fDetectorID = fDetectorID + iPlane*NUMSIDE;
+  return fDetectorID;
+}
+
 
 //****************************************************//
 //************* New canvas methods here **************//
 
-TCanvas *plotC1(){
+TCanvas *plotC1(Int_t barChoice = -1){
+// This will allow for single bar analysis
+  Int_t lowerPaddleNumber = 0;
+  Int_t upperPaddleNumber = 0;
+  if(barChoice != -1){
+    lowerPaddleNumber = NUMPADDLE*barChoice; 
+    upperPaddleNumber = NUMPADDLE*barChoice + NUMPADDLE - 1;
+  }
+  else {
+    lowerPaddleNumber = 0; 
+    upperPaddleNumber = NMaxPMT -1;
+  }
+    
 
   //-------------------------------------------------------------------
   //Create histograms
   //-------------------------------------------------------------------
   // canvas c1
   TH1F *hFingerX = new TH1F("FingerX","Finger X Position", 100, -120, 120);
-  TH1F *hFingerY = new TH1F("FingerY","Finger Y Position", 100, 30, 80);
+  TH1F *hFingerY = new TH1F("FingerY","Finger Y Position", 1000, -400, 100);
   TH1F *hFingerZ = new TH1F("FingerZ","Finger Z Position", 100, -140, 60);
-  TH1F *hFingerT = new TH1F("FingerT","Finger Time", 100, 0, .4);
+  TH1F *hFingerT = new TH1F("FingerT","Finger Time", 200, 0, 2);
 
   //-------------------------------------------------------------------
   //Event loop
@@ -111,7 +140,6 @@ TCanvas *plotC1(){
 
   Long64_t counter = 0; // unused
 
-  const int NMaxPMT=14; 
 
   for (Int_t i = 0; i < nentries; i++) { 
 
@@ -122,26 +150,44 @@ TCanvas *plotC1(){
     tree1->GetEntry(i); 
 
     bool trigger = false;
-    bool finger_hit = false;
+    bool finger_hit_top = false;
+    bool finger_hit_bot = false;
     bool anabar_hit = false;
     bool anabar_top_hit = false;// unused
     bool anabar_bottom_hit = false; // unused
     int j_finger = 0;
     int j_anabar = 0;
+    Int_t detID = 0;
     for (Int_t j=0; j < Detector_Nhits ; j++) {
 	//cout << "Detector hit = " << j << " Detector_id[j] = " << Detector_id[j] << endl;
-	if (Detector_id[j] == Detector_Offset && !finger_hit) {
-		finger_hit = true;
-		j_finger = j;
-		//cout<<"hit in finger";
+	if(!finger_hit_bot || !finger_hit_top){
+		if(Detector_id[j] == Finger_Offset || Detector_id[j] == Finger_Offset+1){
+			finger_hit_top = true;
+			j_finger = j;
+		}
+		if(Detector_id[j] == Finger_Offset+2 || Detector_id[j] == Finger_Offset+3){
+			finger_hit_bot = true;
+			j_finger = j;
+		}
 	}
-	for (Int_t ibar = 1; ibar<15; ibar++){
-		if (Detector_id[j+Detector_Offset] == ibar+Detector_Offset) {
+	for (Int_t iPlane  = 0; iPlane  <NUMPLANE  ; iPlane++ ){
+	for (Int_t iSide   = 0; iSide   <NUMSIDE   ; iSide++  ){
+	for (Int_t iModule = 0; iModule <NUMMODULE ; iModule++){
+	for (Int_t iBar    = 0; iBar    <NUMBAR    ; iBar++   ){
+	for (Int_t iPaddle = 0; iPaddle <NUMPADDLE ; iPaddle++){
+		detID = getDetectorID(iPaddle,iBar,iModule,iSide,iPlane);
+                if (detID >= lowerPaddleNumber && detID <= upperPaddleNumber){
+		if (Detector_id[j+Detector_Offset] == detID+Detector_Offset) {
 		  anabar_hit = true;
-		  anabar_hit_paddle[ibar-1]=true;
+		  anabar_hit_paddle[detID]=true;
 		  j_anabar = j;
 		  //cout << "hit in anabar " << j << endl;
 		}
+                }
+	}
+	}
+	}	
+	}
 	}
 	//if (Detector_id[j] == 14 && !anabar_bottom_hit) {
 	//	anabar_bottom_hit = true;
@@ -151,18 +197,20 @@ TCanvas *plotC1(){
 
     //if (finger_hit && anabar_top_hit && anabar_bottom_hit) trigger = true; 
     //if (finger_hit && anabar_top_hit) trigger = true; 
-    if (finger_hit && anabar_hit) trigger = true; 
+    if (finger_hit_bot && finger_hit_top && anabar_hit) trigger = true; 
 
     for (Int_t j=0; j < Detector_Nhits ; j++) {
 
 	if (trigger) {
 		
 		counter++; // unused
-		if (Detector_id[j] == Detector_Offset && Detector_pdg[j] == PrimaryParticleID) {
+		if (Detector_pdg[j] == PrimaryParticleID){
+		if (Detector_id[j] == Finger_Offset || Detector_id[j]==Finger_Offset+1 || Detector_id[j]==Finger_Offset+2 || Detector_id[j]==Finger_Offset+3 ) {
 			hFingerX->Fill(Detector_x[j]);
         		hFingerY->Fill(Detector_y[j]);
         		hFingerZ->Fill(Detector_z[j]);
     			hFingerT->Fill(Detector_t[j]);
+		}
 		}
 	}
     }
@@ -186,7 +234,18 @@ TCanvas *plotC1(){
 }
 
 
-TCanvas *plotC2 (){
+TCanvas *plotC2 (Int_t barChoice = -1){
+// This will allow for single bar analysis
+  Int_t lowerPaddleNumber = 0;
+  Int_t upperPaddleNumber = 0;
+  if(barChoice != -1){
+    lowerPaddleNumber = NUMPADDLE*barChoice; 
+    upperPaddleNumber = NUMPADDLE*barChoice + NUMPADDLE -1;
+  }
+  else {
+    lowerPaddleNumber = 0; 
+    upperPaddleNumber = NMaxPMT -1;
+  }
 
   //-------------------------------------------------------------------
   //Create histograms
@@ -205,7 +264,6 @@ TCanvas *plotC2 (){
 
   Long64_t counter = 0; // unused
 
-  const int NMaxPMT=14; 
 
   for (Int_t i = 0; i < nentries; i++) { 
 
@@ -249,7 +307,18 @@ TCanvas *plotC2 (){
 }
 
 
-TCanvas *plotC3 (){
+TCanvas *plotC3 (Int_t barChoice = -1){
+// This will allow for single bar analysis
+  Int_t lowerPaddleNumber = 0;
+  Int_t upperPaddleNumber = 0;
+  if(barChoice != -1){
+    lowerPaddleNumber = NUMPADDLE*barChoice; 
+    upperPaddleNumber = NUMPADDLE*barChoice + NUMPADDLE -1;
+  }
+  else {
+    lowerPaddleNumber = 0; 
+    upperPaddleNumber = NMaxPMT -1;
+  }
 
   //-------------------------------------------------------------------
   //Create histograms
@@ -268,7 +337,6 @@ TCanvas *plotC3 (){
 
   Long64_t counter = 0; // unused
 
-  const int NMaxPMT=14; 
 
   for (Int_t i = 0; i < nentries; i++) { 
 
@@ -282,26 +350,44 @@ TCanvas *plotC3 (){
     hDetectorNhits->Fill(Detector_Nhits);
 
     bool trigger = false;
-    bool finger_hit = false;
+    bool finger_hit_top = false;
+    bool finger_hit_bot = false;
     bool anabar_hit = false;
     bool anabar_top_hit = false;// unused
     bool anabar_bottom_hit = false; // unused
     int j_finger = 0;
     int j_anabar = 0;
+    Int_t detID = 0;
     for (Int_t j=0; j < Detector_Nhits ; j++) {
 	//cout << "Detector hit = " << j << " Detector_id[j] = " << Detector_id[j] << endl;
-	if (Detector_id[j] == Detector_Offset && !finger_hit) {
-		finger_hit = true;
-		j_finger = j;
-		//cout<<"hit in finger";
+	if(!finger_hit_bot || !finger_hit_top){
+		if(Detector_id[j] == Finger_Offset || Detector_id[j] == Finger_Offset+1){
+			finger_hit_top = true;
+			j_finger = j;
+		}
+		if(Detector_id[j] == Finger_Offset+2 || Detector_id[j] == Finger_Offset+3){
+			finger_hit_bot = true;
+			j_finger = j;
+		}
 	}
-	for (Int_t ibar = 1; ibar<15; ibar++){
-		if (Detector_id[j+Detector_Offset] == ibar+Detector_Offset) {
+	for (Int_t iPlane  = 0; iPlane  <NUMPLANE  ; iPlane++ ){
+	for (Int_t iSide   = 0; iSide   <NUMSIDE   ; iSide++  ){
+	for (Int_t iModule = 0; iModule <NUMMODULE ; iModule++){
+	for (Int_t iBar    = 0; iBar    <NUMBAR    ; iBar++   ){
+	for (Int_t iPaddle = 0; iPaddle <NUMPADDLE ; iPaddle++){
+		detID = getDetectorID(iPaddle,iBar,iModule,iSide,iPlane);
+                if (detID >= lowerPaddleNumber && detID <= upperPaddleNumber){
+		if (Detector_id[j+Detector_Offset] == detID+Detector_Offset) {
 		  anabar_hit = true;
-		  anabar_hit_paddle[ibar-1]=true;
+		  anabar_hit_paddle[detID]=true;
 		  j_anabar = j;
 		  //cout << "hit in anabar " << j << endl;
 		}
+		}
+	}
+	}
+	}
+	}
 	}
 	//if (Detector_id[j] == 14 && !anabar_bottom_hit) {
 	//	anabar_bottom_hit = true;
@@ -311,7 +397,7 @@ TCanvas *plotC3 (){
 
     //if (finger_hit && anabar_top_hit && anabar_bottom_hit) trigger = true; 
     //if (finger_hit && anabar_top_hit) trigger = true; 
-    if (finger_hit && anabar_hit) trigger = true; 
+    if (finger_hit_top && finger_hit_bot && anabar_hit) trigger = true; 
 
     for (Int_t j=0; j < Detector_Nhits ; j++) {
 
@@ -322,7 +408,7 @@ TCanvas *plotC3 (){
         		hDetectorPdg->Fill(Detector_pdg[j]);
         		hDetectorID->Fill(Detector_id[j]);
 		}
-		if (Detector_id[j] == 1 + Detector_Offset ) {
+		if (Detector_id[j] == Detector_Offset + 1 ) {
         		hDetectorPdg->Fill(Detector_pdg[j]);
         		hDetectorID->Fill(Detector_id[j]);
 		}
@@ -349,7 +435,18 @@ TCanvas *plotC3 (){
 }
 
 
-TCanvas *plotC4 (Float_t Theta_min_cut = 0.0, Int_t Analyse_Secondaries = 1){
+TCanvas *plotC4 (Int_t barChoice = -1, Float_t Theta_min_cut = 0.0, Int_t Analyse_Secondaries = 1){
+// This will allow for single bar analysis
+  Int_t lowerPaddleNumber = 0;
+  Int_t upperPaddleNumber = 0;
+  if(barChoice != -1){
+    lowerPaddleNumber = NUMPADDLE*barChoice; 
+    upperPaddleNumber = NUMPADDLE*barChoice + NUMPADDLE -1;
+  }
+  else {
+    lowerPaddleNumber = 0; 
+    upperPaddleNumber = NMaxPMT -1;
+  }
 
   //-------------------------------------------------------------------
   //Create histograms
@@ -358,12 +455,24 @@ TCanvas *plotC4 (Float_t Theta_min_cut = 0.0, Int_t Analyse_Secondaries = 1){
   TH1F *hFingerPMTNphot = new TH1F("FingerPMTNphot","Finger PMT Number of Photons", Finger_NPhotons_Max+10, -10, Finger_NPhotons_Max);
   TH1F *hFingerEd = new TH1F("FingerEd","Finger Energy Deposited", 100, 0.01, Finger_Edep_Max);
 
-  TH1F *hAnaBarPMTNphot[NUMPADDLE];
+  TH1F *hAnaBarPMTNphot[NMaxPMT];
   TString name, title;
-  for(Int_t i = 1; i <= NUMPADDLE; i++){
-	name.Form("AnaBarPMTNphotA%d", i);
-	title.Form("AnaBar PMT Number of Photons A%d", i);
-	hAnaBarPMTNphot[i-1] = new TH1F(name, title, AnaBar_NPhotons_Max*0.9+20, -20, AnaBar_NPhotons_Max*0.9);
+  Int_t detID = 0;
+  for (Int_t iPlane  = 0; iPlane  <NUMPLANE  ; iPlane++ ){
+  for (Int_t iSide   = 0; iSide   <NUMSIDE   ; iSide++  ){
+  for (Int_t iModule = 0; iModule <NUMMODULE ; iModule++){
+  for (Int_t iBar    = 0; iBar    <NUMBAR    ; iBar++   ){
+  for (Int_t iPaddle = 0; iPaddle <NUMPADDLE ; iPaddle++){
+		detID = getDetectorID(iPaddle,iBar,iModule,iSide,iPlane);
+                if (detID >= lowerPaddleNumber && detID <= upperPaddleNumber){
+	name.Form("AnaBarPMTNphotA%d", detID);
+	title.Form("AnaBar PMT Number of Photons A%d", detID);
+	hAnaBarPMTNphot[detID] = new TH1F(name, title, AnaBar_NPhotons_Max*0.9+20, -20, AnaBar_NPhotons_Max*0.9);
+		}
+  }
+  }
+  }
+  }
   }
 
   TH1F *hAnaBarEd = new TH1F("AnaBarEd","AnaBar Energy Deposited", 100, 0.01, AnaBar_Edep_Max);
@@ -376,7 +485,6 @@ TCanvas *plotC4 (Float_t Theta_min_cut = 0.0, Int_t Analyse_Secondaries = 1){
 
   Long64_t counter = 0; // unused
 
-  const int NMaxPMT=14;
   float edeptot[NMaxPMT];
 
   for (Int_t i = 0; i < nentries; i++) {
@@ -395,26 +503,44 @@ TCanvas *plotC4 (Float_t Theta_min_cut = 0.0, Int_t Analyse_Secondaries = 1){
     Float_t fNewTheta = TMath::ACos(fPy/fMomentum); 
 
     bool trigger = false;
-    bool finger_hit = false;
+    bool finger_hit_top = false;
+    bool finger_hit_bot = false;
     bool anabar_hit = false;
     bool anabar_top_hit = false;// unused
     bool anabar_bottom_hit = false; // unused
     int j_finger = 0;
     int j_anabar = 0;
+    Int_t detID = 0;
     for (Int_t j=0; j < Detector_Nhits ; j++) {
 	//cout << "Detector hit = " << j << " Detector_id[j] = " << Detector_id[j] << endl;
-	if (Detector_id[j] == Detector_Offset && !finger_hit) {
-		finger_hit = true;
-		j_finger = j;
-		//cout<<"hit in finger";
+	if(!finger_hit_bot || !finger_hit_top){
+		if(Detector_id[j] == Finger_Offset || Detector_id[j] == Finger_Offset+1){
+			finger_hit_top = true;
+			j_finger = j;
+		}
+		if(Detector_id[j] == Finger_Offset+2 || Detector_id[j] == Finger_Offset+3){
+			finger_hit_bot = true;
+			j_finger = j;
+		}
 	}
-	for (Int_t ibar = 1; ibar<15; ibar++){
-		if (Detector_id[j+Detector_Offset] == ibar+Detector_Offset) {
+	for (Int_t iPlane  = 0; iPlane  <NUMPLANE  ; iPlane++ ){
+	for (Int_t iSide   = 0; iSide   <NUMSIDE   ; iSide++  ){
+	for (Int_t iModule = 0; iModule <NUMMODULE ; iModule++){
+	for (Int_t iBar    = 0; iBar    <NUMBAR    ; iBar++   ){
+	for (Int_t iPaddle = 0; iPaddle <NUMPADDLE ; iPaddle++){
+		detID = getDetectorID(iPaddle,iBar,iModule,iSide,iPlane);
+                if (detID >= lowerPaddleNumber && detID <= upperPaddleNumber){
+		if (Detector_id[j+Detector_Offset] == detID+Detector_Offset) {
 		  anabar_hit = true;
-		  anabar_hit_paddle[ibar-1]=true;
+		  anabar_hit_paddle[detID]=true;
 		  j_anabar = j;
 		  //cout << "hit in anabar " << j << endl;
 		}
+		}
+	}
+	}
+	}
+	}
 	}
 	//if (Detector_id[j] == 14 && !anabar_bottom_hit) {
 	//	anabar_bottom_hit = true;
@@ -424,18 +550,39 @@ TCanvas *plotC4 (Float_t Theta_min_cut = 0.0, Int_t Analyse_Secondaries = 1){
 
     //if (finger_hit && anabar_top_hit && anabar_bottom_hit) trigger = true; 
     //if (finger_hit && anabar_top_hit) trigger = true; 
-    if (finger_hit && anabar_hit) trigger = true;
+    if (finger_hit_top && finger_hit_bot && anabar_hit) trigger = true;
 
     if (trigger) {
 	
-	for (Int_t icount = 0;icount<15;icount++){
-		PMT_Nphotons_Noise[icount]=PMT_Nphotons[icount]+fRand->Gaus(0.0,pedastel_sigma);
+	for (Int_t iPlane  = 0; iPlane  <NUMPLANE  ; iPlane++ ){
+	for (Int_t iSide   = 0; iSide   <NUMSIDE   ; iSide++  ){
+	for (Int_t iModule = 0; iModule <NUMMODULE ; iModule++){
+	for (Int_t iBar    = 0; iBar    <NUMBAR    ; iBar++   ){
+	for (Int_t iPaddle = 0; iPaddle <NUMPADDLE ; iPaddle++){
+		detID = getDetectorID(iPaddle,iBar,iModule,iSide,iPlane);
+                if (detID >= lowerPaddleNumber && detID <= upperPaddleNumber){
+		PMT_Nphotons_Noise[detID]=PMT_Nphotons[detID]+fRand->Gaus(0.0,pedastel_sigma);
+		}
 	}
-	for (Int_t i = 0; i < NUMPADDLE; i++){
-		hAnaBarPMTNphot[i]->Fill(PMT_Nphotons_Noise[i]);
 	}
-
-        hFingerPMTNphot->Fill(PMT_Nphotons_Noise[14]);
+	}
+	}
+	}
+	for (Int_t iPlane  = 0; iPlane  <NUMPLANE  ; iPlane++ ){
+	for (Int_t iSide   = 0; iSide   <NUMSIDE   ; iSide++  ){
+	for (Int_t iModule = 0; iModule <NUMMODULE ; iModule++){
+	for (Int_t iBar    = 0; iBar    <NUMBAR    ; iBar++   ){
+	for (Int_t iPaddle = 0; iPaddle <NUMPADDLE ; iPaddle++){
+		detID = getDetectorID(iPaddle,iBar,iModule,iSide,iPlane);
+                if (detID >= lowerPaddleNumber && detID <= upperPaddleNumber){
+		hAnaBarPMTNphot[detID]->Fill(PMT_Nphotons_Noise[detID]);
+		}
+	}
+	}
+	}
+	}
+	}
+        hFingerPMTNphot->Fill(fRand->Gaus(0.0,pedastel_sigma));
     }
 
     for (Int_t j=0; j < Detector_Nhits ; j++) {
@@ -443,7 +590,7 @@ TCanvas *plotC4 (Float_t Theta_min_cut = 0.0, Int_t Analyse_Secondaries = 1){
 	if (trigger) {
 		
 		counter++; // unused
-		if (Detector_id[j] == Detector_Offset ) {
+		if (Detector_id[j] == Finger_Offset || Detector_id[j] == Finger_Offset+1 ) {
 			if (Analyse_Secondaries == 1 && fNewTheta > Theta_min_cut) {
 			  edep0tot += Detector_Ed[j];
 			}else{ if (Detector_pdg[j] == PrimaryParticleID && fNewTheta > Theta_min_cut) {
@@ -486,15 +633,34 @@ TCanvas *plotC4 (Float_t Theta_min_cut = 0.0, Int_t Analyse_Secondaries = 1){
 }
 
 
-TCanvas *plotC5 (){
-
+TCanvas *plotC5 (Int_t barChoice = -1){
+// This will allow for single bar analysis
+  Int_t lowerPaddleNumber = 0;
+  Int_t upperPaddleNumber = 0;
+  Int_t xminzbar = 0;
+  Int_t xmaxzbar = 0;
+  Int_t diviserzbar = 0;
+  if(barChoice != -1){
+    lowerPaddleNumber = NUMPADDLE*barChoice; 
+    upperPaddleNumber = NUMPADDLE*barChoice + NUMPADDLE -1;
+    xminzbar = -barChoice*70 +5;
+    xmaxzbar = -85 - 70*barChoice ;
+    diviserzbar = abs(xmaxzbar - xminzbar);
+  }
+  else {
+    lowerPaddleNumber = 0; 
+    upperPaddleNumber = NMaxPMT -1;
+    xminzbar = 5;
+    xmaxzbar = -5*NMaxPMT - 10;
+    diviserzbar = abs(xmaxzbar - xminzbar);
+  }
   //-------------------------------------------------------------------
   //Create histograms
   //-------------------------------------------------------------------
   // canvas c5
   TH1F *hAnaBarX = new TH1F("AnaBarX","AnaBar X Position", 100, -120, 120);
   TH1F *hAnaBarY = new TH1F("AnaBarY","AnaBar Y Position", 100, -30, 30);
-  TH1F *hAnaBarZ = new TH1F("AnaBarZ","AnaBar Z Position", 100, -100, 30);
+  TH1F *hAnaBarZ = new TH1F("AnaBarZ","AnaBar Z Position", diviserzbar, xmaxzbar, xminzbar);
   TH1F *hAnaBarT = new TH1F("AnaBarT","AnaBar Time", 100, 0, .4);
 
   //-------------------------------------------------------------------
@@ -505,7 +671,6 @@ TCanvas *plotC5 (){
 
   Long64_t counter = 0; // unused
 
-  const int NMaxPMT=14; 
 
   for (Int_t i = 0; i < nentries; i++) { 
 
@@ -516,26 +681,44 @@ TCanvas *plotC5 (){
     tree1->GetEntry(i); 
 
     bool trigger = false;
-    bool finger_hit = false;
+    bool finger_hit_top = false;
+    bool finger_hit_bot = false;
     bool anabar_hit = false;
     bool anabar_top_hit = false;// unused
     bool anabar_bottom_hit = false; // unused
     int j_finger = 0;
     int j_anabar = 0;
+    Int_t detID = 0;
     for (Int_t j=0; j < Detector_Nhits ; j++) {
 	//cout << "Detector hit = " << j << " Detector_id[j] = " << Detector_id[j] << endl;
-	if (Detector_id[j] == Detector_Offset && !finger_hit) {
-		finger_hit = true;
-		j_finger = j;
-		//cout<<"hit in finger";
+	if(!finger_hit_bot || !finger_hit_top){
+		if(Detector_id[j] == Finger_Offset || Detector_id[j] == Finger_Offset+1){
+			finger_hit_top = true;
+			j_finger = j;
+		}
+		if(Detector_id[j] == Finger_Offset+2 || Detector_id[j] == Finger_Offset+3){
+			finger_hit_bot = true;
+			j_finger = j;
+		}
 	}
-	for (Int_t ibar = 1; ibar<15; ibar++){
-		if (Detector_id[j+Detector_Offset] == ibar+Detector_Offset) {
+	for (Int_t iPlane  = 0; iPlane  <NUMPLANE  ; iPlane++ ){
+	for (Int_t iSide   = 0; iSide   <NUMSIDE   ; iSide++  ){
+	for (Int_t iModule = 0; iModule <NUMMODULE ; iModule++){
+	for (Int_t iBar    = 0; iBar    <NUMBAR    ; iBar++   ){
+	for (Int_t iPaddle = 0; iPaddle <NUMPADDLE ; iPaddle++){
+		detID = getDetectorID(iPaddle,iBar,iModule,iSide,iPlane);
+                if (detID >= lowerPaddleNumber && detID <= upperPaddleNumber){
+		if (Detector_id[j+Detector_Offset] == detID+Detector_Offset) {
 		  anabar_hit = true;
-		  anabar_hit_paddle[ibar-1]=true;
+		  anabar_hit_paddle[detID]=true;
 		  j_anabar = j;
 		  //cout << "hit in anabar " << j << endl;
 		}
+		}
+	}
+	}
+	}
+	}
 	}
 	//if (Detector_id[j] == 14 && !anabar_bottom_hit) {
 	//	anabar_bottom_hit = true;
@@ -545,14 +728,14 @@ TCanvas *plotC5 (){
 
     //if (finger_hit && anabar_top_hit && anabar_bottom_hit) trigger = true; 
     //if (finger_hit && anabar_top_hit) trigger = true; 
-    if (finger_hit && anabar_hit) trigger = true; 
+    if (finger_hit_top && finger_hit_bot && anabar_hit) trigger = true; 
 
     for (Int_t j=0; j < Detector_Nhits ; j++) {
 
 	if (trigger) {
 		
 		counter++; // unused
-		if ((Detector_id[j] >= 1 + Detector_Offset) && (Detector_id[j] <= 14 + Detector_Offset) && Detector_pdg[j] == PrimaryParticleID) {
+		if ((Detector_id[j] >= lowerPaddleNumber + Detector_Offset) && (Detector_id[j] <= upperPaddleNumber + Detector_Offset) && Detector_pdg[j] == PrimaryParticleID) {
         		hAnaBarX->Fill(Detector_x[j]);
         		hAnaBarY->Fill(Detector_y[j]);
         		hAnaBarZ->Fill(Detector_z[j]);
@@ -580,7 +763,18 @@ TCanvas *plotC5 (){
 }
 
 
-TCanvas *plotC6 (Float_t Theta_min_cut = 0.0, Int_t Analyse_Secondaries = 1){
+TCanvas *plotC6 (Int_t barChoice = -1, Float_t Theta_min_cut = 0.0, Int_t Analyse_Secondaries = 1){
+// This will allow for single bar analysis
+  Int_t lowerPaddleNumber = 0;
+  Int_t upperPaddleNumber = 0;
+  if(barChoice != -1){
+    lowerPaddleNumber = NUMPADDLE*barChoice; 
+    upperPaddleNumber = NUMPADDLE*barChoice + NUMPADDLE -1;
+  }
+  else {
+    lowerPaddleNumber = 0; 
+    upperPaddleNumber = NMaxPMT -1;
+  }
 
   // canvas c6
   TH2F *hE1vsE2 = new TH2F("E1vsE2", "AnaBar Edep vs. Finger Edep", 100, 0.01, Finger_Edep_Max, 100, 0.01, AnaBar_Edep_Max);
@@ -593,7 +787,6 @@ TCanvas *plotC6 (Float_t Theta_min_cut = 0.0, Int_t Analyse_Secondaries = 1){
 
   Long64_t counter = 0; // unused
 
-  const int NMaxPMT=14;
   float edeptot[NMaxPMT];
 
   for (Int_t i = 0; i < nentries; i++) {
@@ -612,26 +805,44 @@ TCanvas *plotC6 (Float_t Theta_min_cut = 0.0, Int_t Analyse_Secondaries = 1){
     Float_t fNewTheta = TMath::ACos(fPy/fMomentum); 
 
     bool trigger = false;
-    bool finger_hit = false;
+    bool finger_hit_top = false;
+    bool finger_hit_bot = false;
     bool anabar_hit = false;
     bool anabar_top_hit = false;// unused
     bool anabar_bottom_hit = false; // unused
     int j_finger = 0;
     int j_anabar = 0;
+    Int_t detID = 0;
     for (Int_t j=0; j < Detector_Nhits ; j++) {
 	//cout << "Detector hit = " << j << " Detector_id[j] = " << Detector_id[j] << endl;
-	if (Detector_id[j] == Detector_Offset && !finger_hit) {
-		finger_hit = true;
-		j_finger = j;
-		//cout<<"hit in finger";
+	if(!finger_hit_bot || !finger_hit_top){
+		if(Detector_id[j] == Finger_Offset || Detector_id[j] == Finger_Offset+1){
+			finger_hit_top = true;
+			j_finger = j;
+		}
+		if(Detector_id[j] == Finger_Offset+2 || Detector_id[j] == Finger_Offset+3){
+			finger_hit_bot = true;
+			j_finger = j;
+		}
 	}
-	for (Int_t ibar = 1; ibar<15; ibar++){
-		if (Detector_id[j+Detector_Offset] == ibar+Detector_Offset) {
+	for (Int_t iPlane  = 0; iPlane  <NUMPLANE  ; iPlane++ ){
+	for (Int_t iSide   = 0; iSide   <NUMSIDE   ; iSide++  ){
+	for (Int_t iModule = 0; iModule <NUMMODULE ; iModule++){
+	for (Int_t iBar    = 0; iBar    <NUMBAR    ; iBar++   ){
+	for (Int_t iPaddle = 0; iPaddle <NUMPADDLE ; iPaddle++){
+		detID = getDetectorID(iPaddle,iBar,iModule,iSide,iPlane);
+                if (detID >= lowerPaddleNumber && detID <= upperPaddleNumber){
+		if (Detector_id[j+Detector_Offset] == detID+Detector_Offset) {
 		  anabar_hit = true;
-		  anabar_hit_paddle[ibar-1]=true;
+		  anabar_hit_paddle[detID]=true;
 		  j_anabar = j;
 		  //cout << "hit in anabar " << j << endl;
 		}
+		}
+	}
+	}
+	}
+	}
 	}
 	//if (Detector_id[j] == 14 && !anabar_bottom_hit) {
 	//	anabar_bottom_hit = true;
@@ -641,14 +852,14 @@ TCanvas *plotC6 (Float_t Theta_min_cut = 0.0, Int_t Analyse_Secondaries = 1){
 
     //if (finger_hit && anabar_top_hit && anabar_bottom_hit) trigger = true; 
     //if (finger_hit && anabar_top_hit) trigger = true; 
-    if (finger_hit && anabar_hit) trigger = true; 
+    if (finger_hit_top && finger_hit_bot && anabar_hit) trigger = true; 
 
     for (Int_t j=0; j < Detector_Nhits ; j++) {
 
 	if (trigger) {
 		
 		counter++; // unused
-		if (Detector_id[j] == Detector_Offset ) {
+		if (Detector_id[j] == Finger_Offset || Detector_id[j] == Finger_Offset+1) {
 			if (Analyse_Secondaries == 1 && fNewTheta > Theta_min_cut) {
 			  edep0tot += Detector_Ed[j];
 			}else{ if (Detector_pdg[j] == PrimaryParticleID && fNewTheta > Theta_min_cut) {
@@ -686,7 +897,18 @@ TCanvas *plotC6 (Float_t Theta_min_cut = 0.0, Int_t Analyse_Secondaries = 1){
 }
 
 
-TCanvas *plotC7 (Float_t Theta_min_cut = 0.0, Int_t Analyse_Secondaries = 1){
+TCanvas *plotC7 (Int_t barChoice = -1, Float_t Theta_min_cut = 0.0, Int_t Analyse_Secondaries = 1){
+// This will allow for single bar analysis
+  Int_t lowerPaddleNumber = 0;
+  Int_t upperPaddleNumber = 0;
+  if(barChoice != -1){
+    lowerPaddleNumber = NUMPADDLE*barChoice; 
+    upperPaddleNumber = NUMPADDLE*barChoice + NUMPADDLE -1;
+  }
+  else {
+    lowerPaddleNumber = 0; 
+    upperPaddleNumber = NMaxPMT -1;
+  }
 
   //-------------------------------------------------------------------
   //Create histograms
@@ -704,7 +926,6 @@ TCanvas *plotC7 (Float_t Theta_min_cut = 0.0, Int_t Analyse_Secondaries = 1){
 
   Long64_t counter = 0; // unused
 
-  const int NMaxPMT=14; 
   float edeptot[NMaxPMT];
 
   for (Int_t i = 0; i < nentries; i++) { 
@@ -723,26 +944,44 @@ TCanvas *plotC7 (Float_t Theta_min_cut = 0.0, Int_t Analyse_Secondaries = 1){
     Float_t fNewTheta = TMath::ACos(fPy/fMomentum); 
 
     bool trigger = false;
-    bool finger_hit = false;
+    bool finger_hit_top = false;
+    bool finger_hit_bot = false;
     bool anabar_hit = false;
     bool anabar_top_hit = false;// unused
     bool anabar_bottom_hit = false; // unused
     int j_finger = 0;
     int j_anabar = 0;
+    Int_t detID = 0;
     for (Int_t j=0; j < Detector_Nhits ; j++) {
 	//cout << "Detector hit = " << j << " Detector_id[j] = " << Detector_id[j] << endl;
-	if (Detector_id[j] == Detector_Offset && !finger_hit) {
-		finger_hit = true;
-		j_finger = j;
-		//cout<<"hit in finger";
+	if(!finger_hit_bot || !finger_hit_top){
+		if(Detector_id[j] == Finger_Offset || Detector_id[j] == Finger_Offset+1){
+			finger_hit_top = true;
+			j_finger = j;
+		}
+		if(Detector_id[j] == Finger_Offset+2 || Detector_id[j] == Finger_Offset+3){
+			finger_hit_bot = true;
+			j_finger = j;
+		}
 	}
-	for (Int_t ibar = 1; ibar<15; ibar++){
-		if (Detector_id[j+Detector_Offset] == ibar+Detector_Offset) {
+	for (Int_t iPlane  = 0; iPlane  <NUMPLANE  ; iPlane++ ){
+	for (Int_t iSide   = 0; iSide   <NUMSIDE   ; iSide++  ){
+	for (Int_t iModule = 0; iModule <NUMMODULE ; iModule++){
+	for (Int_t iBar    = 0; iBar    <NUMBAR    ; iBar++   ){
+	for (Int_t iPaddle = 0; iPaddle <NUMPADDLE ; iPaddle++){
+		detID = getDetectorID(iPaddle,iBar,iModule,iSide,iPlane);
+                if (detID >= lowerPaddleNumber && detID <= upperPaddleNumber){
+		if (Detector_id[j+Detector_Offset] == detID+Detector_Offset) {
 		  anabar_hit = true;
-		  anabar_hit_paddle[ibar-1]=true;
+		  anabar_hit_paddle[detID]=true;
 		  j_anabar = j;
 		  //cout << "hit in anabar " << j << endl;
 		}
+		}
+	}
+	}
+	}
+	}	
 	}
 	//if (Detector_id[j] == 14 && !anabar_bottom_hit) {
 	//	anabar_bottom_hit = true;
@@ -752,7 +991,7 @@ TCanvas *plotC7 (Float_t Theta_min_cut = 0.0, Int_t Analyse_Secondaries = 1){
 
     //if (finger_hit && anabar_top_hit && anabar_bottom_hit) trigger = true; 
     //if (finger_hit && anabar_top_hit) trigger = true; 
-    if (finger_hit && anabar_hit && fNewTheta > 2.524) trigger = true; 
+    if (finger_hit_top && finger_hit_bot && anabar_hit && fNewTheta > 2.524) trigger = true; 
     //if (finger_hit && anabar_hit) trigger = true; 
 
     if (trigger) {
@@ -765,7 +1004,7 @@ TCanvas *plotC7 (Float_t Theta_min_cut = 0.0, Int_t Analyse_Secondaries = 1){
     	for (Int_t j=0; j < Detector_Nhits ; j++) {
 		
 		counter++; // unused
-		if (Detector_id[j] == Detector_Offset ) {
+		if (Detector_id[j] == Finger_Offset || Detector_id[j] == Finger_Offset+1) {
 			if (Analyse_Secondaries == 1 && fNewTheta > Theta_min_cut) {
 			  edep0tot += Detector_Ed[j];
 			}else{ if (Detector_pdg[j] == PrimaryParticleID && fNewTheta > Theta_min_cut) {
@@ -816,29 +1055,63 @@ TCanvas *plotC7 (Float_t Theta_min_cut = 0.0, Int_t Analyse_Secondaries = 1){
 
 }
 
-
-TCanvas *plotC8 (Float_t Theta_min_cut = 3.05, Int_t Analyse_Secondaries = 1){
+// TODO 
+TCanvas *plotC8 (Int_t barChoice = -1, Float_t Theta_min_cut = 3.05, Int_t Analyse_Secondaries = 1){
+// This will allow for single bar analysis
+  Int_t lowerPaddleNumber = 0;
+  Int_t upperPaddleNumber = 0;
+  if(barChoice != -1){
+    lowerPaddleNumber = NUMPADDLE*barChoice; 
+    upperPaddleNumber = NUMPADDLE*barChoice + NUMPADDLE -1;
+  }
+  else {
+    lowerPaddleNumber = 0; 
+    upperPaddleNumber = NMaxPMT -1;
+  }
 
   //-------------------------------------------------------------------
   //Create histograms
   //-------------------------------------------------------------------
 
-  TH1F *hAnaBarPMTNphot[NUMPADDLE];
+  TH1F *hAnaBarPMTNphot[NMaxPMT];
   TString name, title;
-  for(Int_t i = 1; i <= NUMPADDLE; i++){
-	name.Form("AnaBarPMTNphotA%d", i);
-	title.Form("AnaBar PMT Number of Photons A%d", i);
-	hAnaBarPMTNphot[i-1] = new TH1F(name, title, AnaBar_NPhotons_Max*0.9+20, -20, AnaBar_NPhotons_Max*0.9);
+  Int_t detID = 0;
+  for (Int_t iPlane  = 0; iPlane  <NUMPLANE  ; iPlane++ ){
+  for (Int_t iSide   = 0; iSide   <NUMSIDE   ; iSide++  ){
+  for (Int_t iModule = 0; iModule <NUMMODULE ; iModule++){
+  for (Int_t iBar    = 0; iBar    <NUMBAR    ; iBar++   ){
+  for (Int_t iPaddle = 0; iPaddle <NUMPADDLE ; iPaddle++){
+		detID = getDetectorID(iPaddle,iBar,iModule,iSide,iPlane);
+                if (detID >= lowerPaddleNumber && detID <= upperPaddleNumber){
+	name.Form("AnaBarPMTNphotA%d", detID);
+	title.Form("AnaBar PMT Number of Photons A%d", detID);
+	hAnaBarPMTNphot[detID] = new TH1F(name, title, AnaBar_NPhotons_Max*0.9+20, -20, AnaBar_NPhotons_Max*0.9);
+		}
+  }
+  }
+  }
+  }
   }
 
   TH2F *hAnaBar_Edep_vs_Nphot = new TH2F("AnaBarEdepVsNphot", "AnaBar Edep vs. Number of Photons", AnaBar_NPhotons_Max, 0, AnaBar_NPhotons_Max, 100, 0.01, AnaBar_Edep_Max);
 
   TH1F *hAnaBarEd = new TH1F("AnaBarEd","AnaBar Energy Deposited", 100, 0.01, AnaBar_Edep_Max);
-  TH1F *hAnaBarEdAll[NUMPADDLE]; // <-- I want to plot this for all 14 paddles to see if there is a trend on where the peak is 
-  for (Int_t i = 1; i <= NUMPADDLE; i++){
-	name.Form("AnaBarEd%d", i);
-	title.Form("AnaBar Energy Deposited A%d", i);
-	hAnaBarEdAll[i-1] = new TH1F(name, title, 100, 0.01, AnaBar_Edep_Max);
+  TH1F *hAnaBarEdAll[NMaxPMT]; // <-- I want to plot this for all 14 paddles to see if there is a trend on where the peak is 
+  for (Int_t iPlane  = 0; iPlane  <NUMPLANE  ; iPlane++ ){
+  for (Int_t iSide   = 0; iSide   <NUMSIDE   ; iSide++  ){
+  for (Int_t iModule = 0; iModule <NUMMODULE ; iModule++){
+  for (Int_t iBar    = 0; iBar    <NUMBAR    ; iBar++   ){
+  for (Int_t iPaddle = 0; iPaddle <NUMPADDLE ; iPaddle++){
+		detID = getDetectorID(iPaddle,iBar,iModule,iSide,iPlane);
+                if (detID >= lowerPaddleNumber && detID <= upperPaddleNumber){
+	name.Form("AnaBarEd%d", detID);
+	title.Form("AnaBar Energy Deposited A%d", detID);
+	hAnaBarEdAll[detID] = new TH1F(name, title, 100, 0.01, AnaBar_Edep_Max);
+		}
+  }
+  }
+  }
+  }
   }
 
   //-------------------------------------------------------------------
@@ -849,7 +1122,6 @@ TCanvas *plotC8 (Float_t Theta_min_cut = 3.05, Int_t Analyse_Secondaries = 1){
 
   Long64_t counter = 0; // unused
 
-  const int NMaxPMT=14; 
   float edeptot[NMaxPMT]; 
 
   for (Int_t i = 0; i < nentries; i++) { 
@@ -867,26 +1139,44 @@ TCanvas *plotC8 (Float_t Theta_min_cut = 3.05, Int_t Analyse_Secondaries = 1){
     Float_t fNewTheta = TMath::ACos(fPy/fMomentum); 
 
     bool trigger = false;
-    bool finger_hit = false;
+    bool finger_hit_top = false;
+    bool finger_hit_bot = false;
     bool anabar_hit = false;
     bool anabar_top_hit = false;// unused
     bool anabar_bottom_hit = false; // unused
     int j_finger = 0;
     int j_anabar = 0;
+    Int_t detID = 0;
     for (Int_t j=0; j < Detector_Nhits ; j++) {
 	//cout << "Detector hit = " << j << " Detector_id[j] = " << Detector_id[j] << endl;
-	if (Detector_id[j] == Detector_Offset && !finger_hit) {
-		finger_hit = true;
-		j_finger = j;
-		//cout<<"hit in finger";
+	if(!finger_hit_bot || !finger_hit_top){
+		if(Detector_id[j] == Finger_Offset || Detector_id[j] == Finger_Offset+1){
+			finger_hit_top = true;
+			j_finger = j;
+		}
+		if(Detector_id[j] == Finger_Offset+2 || Detector_id[j] == Finger_Offset+3){
+			finger_hit_bot = true;
+			j_finger = j;
+		}
 	}
-	for (Int_t ibar = 1; ibar<15; ibar++){
-		if (Detector_id[j+Detector_Offset] == ibar+Detector_Offset) {
+        for (Int_t iPlane  = 0; iPlane  <NUMPLANE  ; iPlane++ ){
+        for (Int_t iSide   = 0; iSide   <NUMSIDE   ; iSide++  ){
+        for (Int_t iModule = 0; iModule <NUMMODULE ; iModule++){
+        for (Int_t iBar    = 0; iBar    <NUMBAR    ; iBar++   ){
+        for (Int_t iPaddle = 0; iPaddle <NUMPADDLE ; iPaddle++){
+		detID = getDetectorID(iPaddle,iBar,iModule,iSide,iPlane);
+                if (detID >= lowerPaddleNumber && detID <= upperPaddleNumber){
+		if (Detector_id[j+Detector_Offset] == detID+Detector_Offset) {
 		  anabar_hit = true;
-		  anabar_hit_paddle[ibar-1]=true;
+		  anabar_hit_paddle[detID]=true;
 		  j_anabar = j;
 		  //cout << "hit in anabar " << j << endl;
 		}
+		}
+	}
+	}
+	}
+	}
 	}
 	//if (Detector_id[j] == 14 && !anabar_bottom_hit) {
 	//	anabar_bottom_hit = true;
@@ -897,30 +1187,51 @@ TCanvas *plotC8 (Float_t Theta_min_cut = 3.05, Int_t Analyse_Secondaries = 1){
     //if (finger_hit && anabar_top_hit && anabar_bottom_hit) trigger = true; 
     //if (finger_hit && anabar_top_hit) trigger = true; 
     //if (finger_hit && anabar_hit) trigger = true;
-    if (finger_hit && anabar_hit && fNewTheta > 2.524) trigger = true; 
+    if (finger_hit_top && finger_hit_bot && anabar_hit && fNewTheta > 2.524) trigger = true; 
 
     if (trigger) {
 
-	for (Int_t icount = 0;icount < NUMPADDLE;icount++){
-		PMT_Nphotons_Noise[icount]=PMT_Nphotons[icount]+fRand->Gaus(0.0,pedastel_sigma);
-		hAnaBarPMTNphot[icount]->Fill(PMT_Nphotons_Noise[icount]);
+        for (Int_t iPlane  = 0; iPlane  <NUMPLANE  ; iPlane++ ){
+        for (Int_t iSide   = 0; iSide   <NUMSIDE   ; iSide++  ){
+        for (Int_t iModule = 0; iModule <NUMMODULE ; iModule++){
+        for (Int_t iBar    = 0; iBar    <NUMBAR    ; iBar++   ){
+        for (Int_t iPaddle = 0; iPaddle <NUMPADDLE ; iPaddle++){
+		detID = getDetectorID(iPaddle,iBar,iModule,iSide,iPlane);
+                if (detID >= lowerPaddleNumber && detID <= upperPaddleNumber){
+		PMT_Nphotons_Noise[detID]=PMT_Nphotons[detID]+fRand->Gaus(0.0,pedastel_sigma);
+		hAnaBarPMTNphot[detID]->Fill(PMT_Nphotons_Noise[detID]);
+		}
 	}
-
+	}
+	}
+	}
+	}
     	for (Int_t j=0; j < Detector_Nhits ; j++) {
 
 		counter++; // unused
-		if (Detector_id[j] > Detector_Offset && Detector_id[j] <= NMaxPMT+Detector_Offset) {
+		if (Detector_id[j] >= lowerPaddleNumber && Detector_id[j] <= upperPaddleNumber) {
 			if (Analyse_Secondaries == 1 && fNewTheta > Theta_min_cut) {
-				edeptot[Detector_id[j]-1-Detector_Offset] += Detector_Ed[j];
+				edeptot[Detector_id[j]] += Detector_Ed[j];
 			}else{ if (Detector_pdg[j] == PrimaryParticleID && fNewTheta > Theta_min_cut) {
-					edeptot[Detector_id[j]-1-Detector_Offset] += Detector_Ed[j];
+					edeptot[Detector_id[j]] += Detector_Ed[j];
 		     	       }
 			}
 		}
     	}
 
-	for(Int_t i = 0; i < NUMPADDLE; i ++){
-		hAnaBarEdAll[i]->Fill(edeptot[i]);
+        for (Int_t iPlane  = 0; iPlane  <NUMPLANE  ; iPlane++ ){
+        for (Int_t iSide   = 0; iSide   <NUMSIDE   ; iSide++  ){
+        for (Int_t iModule = 0; iModule <NUMMODULE ; iModule++){
+        for (Int_t iBar    = 0; iBar    <NUMBAR    ; iBar++   ){
+        for (Int_t iPaddle = 0; iPaddle <NUMPADDLE ; iPaddle++){
+		detID = getDetectorID(iPaddle,iBar,iModule,iSide,iPlane);
+                if (detID >= lowerPaddleNumber && detID <= upperPaddleNumber){
+		hAnaBarEdAll[detID]->Fill(edeptot[detID]);
+		}
+	}
+	}
+	}
+	}
 	}
     	hAnaBarEd->Fill(edeptot[6]);
     	hAnaBar_Edep_vs_Nphot->Fill(PMT_Nphotons[6],edeptot[6]); 
@@ -945,16 +1256,22 @@ TCanvas *plotC8 (Float_t Theta_min_cut = 3.05, Int_t Analyse_Secondaries = 1){
   hAnaBar_Edep_vs_Nphot->Draw("COLZ");
 
   TF1* function;
-  Double_t means[NUMPADDLE], meanErr[NUMPADDLE];
+  
+  Double_t means[NMaxPMT], meanErr[NMaxPMT];
 
-  for(Int_t i = 0; i < NUMPADDLE; i++) {
-
-	if (i+1 == 3)
+  for (Int_t iPlane  = 0; iPlane  <NUMPLANE  ; iPlane++ ){
+  for (Int_t iSide   = 0; iSide   <NUMSIDE   ; iSide++  ){
+  for (Int_t iModule = 0; iModule <NUMMODULE ; iModule++){
+  for (Int_t iBar    = 0; iBar    <NUMBAR    ; iBar++   ){
+  for (Int_t iPaddle = 0; iPaddle <NUMPADDLE ; iPaddle++){
+		detID = getDetectorID(iPaddle,iBar,iModule,iSide,iPlane);
+                if (detID >= lowerPaddleNumber && detID <= upperPaddleNumber){
+	if (detID+Detector_Offset == 3)
 	    cEdOne->cd();
 	else
-	    cEd->cd(i+1);
+	    cEd->cd(detID+1);
 	
-	hAnaBarEdAll[i]->Draw();
+	hAnaBarEdAll[detID]->Draw();
 
 	//Double_t start = 6.4;
 	//Double_t start = 5.8;
@@ -962,17 +1279,33 @@ TCanvas *plotC8 (Float_t Theta_min_cut = 3.05, Int_t Analyse_Secondaries = 1){
 
 	Double_t par3[3];
 	TF1 *gf = new TF1("gf", "gaus", start, AnaBar_Edep_Max);
-	hAnaBarEdAll[i]->Fit(gf, "R");
-	function = hAnaBarEdAll[i]->GetFunction("gf");
+	hAnaBarEdAll[detID]->Fit(gf, "R");
+	function = hAnaBarEdAll[detID]->GetFunction("gf");
 	function->SetLineColor(1);
 
-	means[i] = function->GetParameter(1);
-	meanErr[i] = function->GetParError(1);
+	means[detID] = function->GetParameter(1);
+	meanErr[detID] = function->GetParError(1);
+		}
+  }
+  }
+  }
+  }
   }
 
-  for(Int_t i = 0; i < NUMPADDLE; i++){
-	cout << "Paddle " << i+1 << ": Mean peak Edep = " << means[i] << " MeV" << endl;
-	cout << "    \t Mean Edep error = " << meanErr[i] << " MeV" << endl;
+  for (Int_t iPlane  = 0; iPlane  <NUMPLANE  ; iPlane++ ){
+  for (Int_t iSide   = 0; iSide   <NUMSIDE   ; iSide++  ){
+  for (Int_t iModule = 0; iModule <NUMMODULE ; iModule++){
+  for (Int_t iBar    = 0; iBar    <NUMBAR    ; iBar++   ){
+  for (Int_t iPaddle = 0; iPaddle <NUMPADDLE ; iPaddle++){
+		detID = getDetectorID(iPaddle,iBar,iModule,iSide,iPlane);
+                if (detID >= lowerPaddleNumber && detID <= upperPaddleNumber){
+	cout << "Paddle " << detID << ": Mean peak Edep = " << means[detID] << " MeV" << endl;
+	cout << "    \t Mean Edep error = " << meanErr[detID] << " MeV" << endl;
+		}
+  }
+  }
+  }
+  }
   }
 
   Double_t sumMeans = 0.0;
@@ -981,17 +1314,29 @@ TCanvas *plotC8 (Float_t Theta_min_cut = 3.05, Int_t Analyse_Secondaries = 1){
   Double_t sumErr;
   Double_t meanMeanErr;
 
-  for(int i = 0; i < NUMPADDLE; i++){
-	sumMeans += means[i];
-	sumMeanErrSqrs += meanErr[i]*meanErr[i];
+  for (int iPlane  = 0; iPlane  <NUMPLANE  ; iPlane++ ){
+  for (int iSide   = 0; iSide   <NUMSIDE   ; iSide++  ){
+  for (int iModule = 0; iModule <NUMMODULE ; iModule++){
+  for (int iBar    = 0; iBar    <NUMBAR    ; iBar++   ){
+  for (int iPaddle = 0; iPaddle <NUMPADDLE ; iPaddle++){
+		detID = getDetectorID(iPaddle,iBar,iModule,iSide,iPlane);
+                if (detID >= lowerPaddleNumber && detID <= upperPaddleNumber){
+	int detid = (int) detID;
+	sumMeans += means[detid];
+	sumMeanErrSqrs += meanErr[detid]*meanErr[detid];
+		}
+  }
+  }
+  }
+  }
   }
   cout << "Sum of mean error squares = " << sumMeanErrSqrs << endl;
 
-  meanMean = sumMeans/NUMPADDLE;
+  meanMean = sumMeans/NMaxPMT;
 
   sumErr = TMath::Sqrt(sumMeanErrSqrs);
   cout << "Error in sum of means = " << sumErr << endl;
-  meanMeanErr = sumErr/NUMPADDLE;
+  meanMeanErr = sumErr/NMaxPMT;
 
   cout << "Mean peak Edep across all paddles: " << meanMean << " MeV" << endl;
   cout << "Mean peak Edep uncertainty: " << meanMeanErr << " Mev" << endl;
@@ -1002,26 +1347,46 @@ TCanvas *plotC8 (Float_t Theta_min_cut = 3.05, Int_t Analyse_Secondaries = 1){
 }
 
 
-TCanvas *plotC9 (Float_t Theta_min_cut = 0.0, Float_t Edep_Threshold = 0.0, Int_t Analyse_Secondaries = 1){
+TCanvas *plotC9 (Int_t barChoice = -1, Float_t Theta_min_cut = 0.0, Float_t Edep_Threshold = 0.0, Int_t Analyse_Secondaries = 1){
+// This will allow for single bar analysis
+  Int_t lowerPaddleNumber = 0;
+  Int_t upperPaddleNumber = 0;
+  if(barChoice != -1){
+    lowerPaddleNumber = NUMPADDLE*barChoice; 
+    upperPaddleNumber = NUMPADDLE*barChoice + NUMPADDLE -1;
+  }
+  else {
+	std::cout<<"Only 1 Bar can be analyzed with plotC9() at a time"<<std::endl;
+	return NULL;
+  }
 
   //-------------------------------------------------------------------
   //Create histograms
   //-------------------------------------------------------------------
 
-  TH1F *hAnaBarPMTNphot[NUMPADDLE];
+  TH1F *hAnaBarPMTNphot[NMaxPMT];
+  TH1F *hAnaBarPMTNoiseCutNphot[NMaxPMT];
   TString name, title;
-  for(Int_t i = 1; i <= NUMPADDLE; i++){
-	name.Form("AnaBarPMTNphotA%d", i);
-	title.Form("AnaBar PMT Number of Photons A%d", i);
-	hAnaBarPMTNphot[i-1] = new TH1F(name, title, AnaBar_NPhotons_Max+20, -20, AnaBar_NPhotons_Max);
+  Int_t detID = 0;
+  for (Int_t iPlane  = 0; iPlane  <NUMPLANE  ; iPlane++ ){
+  for (Int_t iSide   = 0; iSide   <NUMSIDE   ; iSide++  ){
+  for (Int_t iModule = 0; iModule <NUMMODULE ; iModule++){
+  for (Int_t iBar    = 0; iBar    <NUMBAR    ; iBar++   ){
+  for (Int_t iPaddle = 0; iPaddle <NUMPADDLE ; iPaddle++){
+      detID = getDetectorID(iPaddle,iBar,iModule,iSide,iPlane);
+      if (detID >= lowerPaddleNumber && detID <= upperPaddleNumber){
+	name.Form("AnaBarPMTNphotA%d", detID);
+	title.Form("AnaBar PMT Number of Photons A%d", detID);
+	hAnaBarPMTNphot[detID] = new TH1F(name, title, AnaBar_NPhotons_Max+20, -20, AnaBar_NPhotons_Max);
+	name.Form("AnaBarPMTNoiseCutNphotA%d", detID);
+	title.Form("AnaBar PMT Number of Photons A%d", detID);
+	hAnaBarPMTNoiseCutNphot[detID] = new TH1F(name, title, AnaBar_NPhotons_Max+20, -20, AnaBar_NPhotons_Max);
+	hAnaBarPMTNoiseCutNphot[detID]->SetLineColor(kRed);
+		}
   }
-
-  TH1F *hAnaBarPMTNoiseCutNphot[NUMPADDLE];
-  for(Int_t i = 1; i <= NUMPADDLE; i++){
-	name.Form("AnaBarPMTNoiseCutNphotA%d", i);
-	title.Form("AnaBar PMT Number of Photons A%d", i);
-	hAnaBarPMTNoiseCutNphot[i-1] = new TH1F(name, title, AnaBar_NPhotons_Max+20, -20, AnaBar_NPhotons_Max);
-	hAnaBarPMTNoiseCutNphot[i-1]->SetLineColor(kRed);
+  }
+  }
+  }
   }
 
   //-------------------------------------------------------------------
@@ -1032,7 +1397,6 @@ TCanvas *plotC9 (Float_t Theta_min_cut = 0.0, Float_t Edep_Threshold = 0.0, Int_
 
   Long64_t counter = 0; // unused
 
-  const int NMaxPMT=14; 
   float edeptot[NMaxPMT]; 
 
   for (Int_t i = 0; i < nentries; i++) {
@@ -1049,27 +1413,46 @@ TCanvas *plotC9 (Float_t Theta_min_cut = 0.0, Float_t Edep_Threshold = 0.0, Int_
     Float_t fPy        = fMomentum * TMath::Sin(Prim_Th) * TMath::Sin(Prim_Ph);
     Float_t fNewTheta = TMath::ACos(fPy/fMomentum); 
 
+
     bool trigger = false;
-    bool finger_hit = false;
+    bool finger_hit_top = false;
+    bool finger_hit_bot = false;
     bool anabar_hit = false;
     bool anabar_top_hit = false;// unused
     bool anabar_bottom_hit = false; // unused
     int j_finger = 0;
     int j_anabar = 0;
+    Int_t detID = 0;
     for (Int_t j=0; j < Detector_Nhits ; j++) {
 	//cout << "Detector hit = " << j << " Detector_id[j] = " << Detector_id[j] << endl;
-	if (Detector_id[j] == Detector_Offset && !finger_hit) {
-		finger_hit = true;
-		j_finger = j;
-		//cout<<"hit in finger";
+	if(!finger_hit_bot || !finger_hit_top){
+		if(Detector_id[j] == Finger_Offset || Detector_id[j] == Finger_Offset+1){
+			finger_hit_top = true;
+			j_finger = j;
+		}
+		if(Detector_id[j] == Finger_Offset+2 || Detector_id[j] == Finger_Offset+3){
+			finger_hit_bot = true;
+			j_finger = j;
+		}
 	}
-	for (Int_t ibar = 1; ibar<15; ibar++){
-		if (Detector_id[j+Detector_Offset] == ibar+Detector_Offset) {
+ 	for (Int_t iPlane  = 0; iPlane  <NUMPLANE  ; iPlane++ ){
+ 	for (Int_t iSide   = 0; iSide   <NUMSIDE   ; iSide++  ){
+ 	for (Int_t iModule = 0; iModule <NUMMODULE ; iModule++){
+ 	for (Int_t iBar    = 0; iBar    <NUMBAR    ; iBar++   ){
+ 	for (Int_t iPaddle = 0; iPaddle <NUMPADDLE ; iPaddle++){
+		detID = getDetectorID(iPaddle,iBar,iModule,iSide,iPlane);
+                if (detID >= lowerPaddleNumber && detID <= upperPaddleNumber){
+		if (Detector_id[j+Detector_Offset] == detID+Detector_Offset) {
 		  anabar_hit = true;
-		  anabar_hit_paddle[ibar-1]=true;
+		  anabar_hit_paddle[detID]=true;
 		  j_anabar = j;
 		  //cout << "hit in anabar " << j << endl;
 		}
+		}
+	}
+	}
+	}
+	}
 	}
 	//if (Detector_id[j] == 14 && !anabar_bottom_hit) {
 	//	anabar_bottom_hit = true;
@@ -1079,15 +1462,26 @@ TCanvas *plotC9 (Float_t Theta_min_cut = 0.0, Float_t Edep_Threshold = 0.0, Int_
 
     //if (finger_hit && anabar_top_hit && anabar_bottom_hit) trigger = true; 
     //if (finger_hit && anabar_top_hit) trigger = true; 
-    if (finger_hit && anabar_hit && fNewTheta > 2.524) trigger = true; 
+    if (finger_hit_top && finger_hit_bot && anabar_hit && fNewTheta > 2.524) trigger = true; 
     //if (finger_hit && anabar_hit) trigger = true; 
 
     if (trigger) {
 
-	for (Int_t icount = 0;icount < NUMPADDLE;icount++){
-		PMT_Nphotons_Noise[icount]=PMT_Nphotons[icount]+fRand->Gaus(0.0,pedastel_sigma);
+ 	for (Int_t iPlane  = 0; iPlane  <NUMPLANE  ; iPlane++ ){
+ 	for (Int_t iSide   = 0; iSide   <NUMSIDE   ; iSide++  ){
+ 	for (Int_t iModule = 0; iModule <NUMMODULE ; iModule++){
+ 	for (Int_t iBar    = 0; iBar    <NUMBAR    ; iBar++   ){
+ 	for (Int_t iPaddle = 0; iPaddle <NUMPADDLE ; iPaddle++){
+		detID = getDetectorID(iPaddle,iBar,iModule,iSide,iPlane);
+                if (detID >= lowerPaddleNumber && detID <= upperPaddleNumber){
+		PMT_Nphotons_Noise[detID]=PMT_Nphotons[detID]+fRand->Gaus(0.0,pedastel_sigma);
 		//PMT_Nphotons_Noise[icount]=PMT_Nphotons[icount];
-		hAnaBarPMTNphot[icount]->Fill(PMT_Nphotons_Noise[icount]);
+		hAnaBarPMTNphot[detID]->Fill(PMT_Nphotons_Noise[detID]);
+		}
+	}
+	}
+	}
+	}
 	}
     }
 
@@ -1098,9 +1492,9 @@ TCanvas *plotC9 (Float_t Theta_min_cut = 0.0, Float_t Edep_Threshold = 0.0, Int_
 		counter++; // unused
 		if (Detector_id[j] > Detector_Offset && Detector_id[j] <= NMaxPMT+Detector_Offset) {
 			if (Analyse_Secondaries == 1 && fNewTheta > Theta_min_cut) {
-				edeptot[Detector_id[j]-1-Detector_Offset] += Detector_Ed[j];
+				edeptot[Detector_id[j]] += Detector_Ed[j];
 			}else{ if (Detector_pdg[j] == PrimaryParticleID && fNewTheta > Theta_min_cut) {
-					edeptot[Detector_id[j]-1-Detector_Offset] += Detector_Ed[j];
+					edeptot[Detector_id[j]] += Detector_Ed[j];
 		     	       }
 			}
 		}
@@ -1108,9 +1502,20 @@ TCanvas *plotC9 (Float_t Theta_min_cut = 0.0, Float_t Edep_Threshold = 0.0, Int_
     }
 
     if (trigger) {
-	for (Int_t i = 0; i < NUMPADDLE; i++){
-		if(anabar_hit_paddle[i]&&edeptot[i]>=Edep_Threshold)
-			hAnaBarPMTNoiseCutNphot[i]->Fill(PMT_Nphotons_Noise[i]);
+ 	for (Int_t iPlane  = 0; iPlane  <NUMPLANE  ; iPlane++ ){
+ 	for (Int_t iSide   = 0; iSide   <NUMSIDE   ; iSide++  ){
+ 	for (Int_t iModule = 0; iModule <NUMMODULE ; iModule++){
+ 	for (Int_t iBar    = 0; iBar    <NUMBAR    ; iBar++   ){
+ 	for (Int_t iPaddle = 0; iPaddle <NUMPADDLE ; iPaddle++){
+		detID = getDetectorID(iPaddle,iBar,iModule,iSide,iPlane);
+                if (detID >= lowerPaddleNumber && detID <= upperPaddleNumber){
+		if(anabar_hit_paddle[detID]&&edeptot[detID]>=Edep_Threshold)
+			hAnaBarPMTNoiseCutNphot[detID]->Fill(PMT_Nphotons_Noise[detID]);
+		}
+	}
+	}
+	}
+	}
 	}
     }
 
@@ -1118,7 +1523,7 @@ TCanvas *plotC9 (Float_t Theta_min_cut = 0.0, Float_t Edep_Threshold = 0.0, Int_
   }
 
   TCanvas *c9 = new TCanvas("c9", "c9", 350,250,800,500);
-  c9->Divide(4,4, 0.01, 0.01, 0);
+  c9->Divide(4,4);
 
   TCanvas *c9Single = new TCanvas("c9Single", "c9Single", 400, 300, 800, 500);
 
@@ -1133,21 +1538,31 @@ TCanvas *plotC9 (Float_t Theta_min_cut = 0.0, Float_t Edep_Threshold = 0.0, Int_
   Int_t    ndf;
   Double_t SNRPeak, SNRFWHM;
 
-  for (Int_t i = 0; i < NUMPADDLE; i++){
+  for (Int_t iPlane  = 0; iPlane  <NUMPLANE  ; iPlane++ ){
+  for (Int_t iSide   = 0; iSide   <NUMSIDE   ; iSide++  ){
+  for (Int_t iModule = 0; iModule <NUMMODULE ; iModule++){
+  for (Int_t iBar    = 0; iBar    <NUMBAR    ; iBar++   ){
+  for (Int_t iPaddle = 0; iPaddle <NUMPADDLE ; iPaddle++){
+		detID = getDetectorID(iPaddle,iBar,iModule,iSide,iPlane);
+                if (detID >= lowerPaddleNumber && detID <= upperPaddleNumber){
 
-	if(i == NUMPADDLE - 1)
+	if(detID == upperPaddleNumber)
 	    c9Single->cd();
-	else
-	    c9->cd(i+1);
-
+	else{
+	    c9->cd(iPaddle);
+std::cout<<"Going into section "<<iPaddle<<" of TCanvas c9"<<std::endl;
+}
   	gPad->SetLogy();
-  	hAnaBarPMTNphot[i]->Draw();
- 	//hAnaBarPMTNoiseCutNphot[i]->Draw("SAME");
-  	fr[0]=0.7*hAnaBarPMTNphot[i]->GetMean();
-  	fr[1]=25.0*hAnaBarPMTNphot[i]->GetMean();
-  	TF1 *fitsnr = langaufit(hAnaBarPMTNphot[i],fr,sv,pllo,plhi,fp,fpe,&chisqr,&ndf);
+  	hAnaBarPMTNphot[detID]->Draw();
+  	fr[0]=0.7*hAnaBarPMTNphot[detID]->GetMean();
+  	fr[1]=25.0*hAnaBarPMTNphot[detID]->GetMean();
+  	TF1 *fitsnr = langaufit(hAnaBarPMTNphot[detID],fr,sv,pllo,plhi,fp,fpe,&chisqr,&ndf);
   	langaupro(fp,SNRPeak,SNRFWHM);
-  	//fitsnr->Draw("SAME");
+		}
+  }
+  }
+  }
+  }
   }
 
   return c9;
@@ -1155,7 +1570,18 @@ TCanvas *plotC9 (Float_t Theta_min_cut = 0.0, Float_t Edep_Threshold = 0.0, Int_
 }
 
 
-TCanvas *plotC10 (){
+TCanvas *plotC10 (Int_t barChoice = -1){
+// This will allow for single bar analysis
+  Int_t lowerPaddleNumber = 0;
+  Int_t upperPaddleNumber = 0;
+  if(barChoice != -1){
+    lowerPaddleNumber = NUMPADDLE*barChoice; 
+    upperPaddleNumber = NUMPADDLE*barChoice + NUMPADDLE -1;
+  }
+  else {
+    lowerPaddleNumber = 0; 
+    upperPaddleNumber = NMaxPMT -1;
+  }
 
   // Histograms
   TH1F *hFingerPMTKE = new TH1F("FingerPMTKE","Photon Wavelength Production Spectrum", 400, 300.0, 700.0);
@@ -1169,7 +1595,6 @@ TCanvas *plotC10 (){
 
   Long64_t counter = 0; // unused
 
-  const int NMaxPMT=14;
 
   for (Int_t i = 0; i < nentries; i++) { 
 
@@ -1180,26 +1605,44 @@ TCanvas *plotC10 (){
     tree1->GetEntry(i); 
 
     bool trigger = false;
-    bool finger_hit = false;
+    bool finger_hit_top = false;
+    bool finger_hit_bot = false;
     bool anabar_hit = false;
     bool anabar_top_hit = false;// unused
     bool anabar_bottom_hit = false; // unused
     int j_finger = 0;
     int j_anabar = 0;
+    Int_t detID = 0;
     for (Int_t j=0; j < Detector_Nhits ; j++) {
 	//cout << "Detector hit = " << j << " Detector_id[j] = " << Detector_id[j] << endl;
-	if (Detector_id[j] == Detector_Offset && !finger_hit) {
-		finger_hit = true;
-		j_finger = j;
-		//cout<<"hit in finger";
+	if(!finger_hit_bot || !finger_hit_top){
+		if(Detector_id[j] == Finger_Offset || Detector_id[j] == Finger_Offset+1){
+			finger_hit_top = true;
+			j_finger = j;
+		}
+		if(Detector_id[j] == Finger_Offset+2 || Detector_id[j] == Finger_Offset+3){
+			finger_hit_bot = true;
+			j_finger = j;
+		}
 	}
-	for (Int_t ibar = 1; ibar<15; ibar++){
-		if (Detector_id[j+Detector_Offset] == ibar+Detector_Offset) {
+ 	for (Int_t iPlane  = 0; iPlane  <NUMPLANE  ; iPlane++ ){
+ 	for (Int_t iSide   = 0; iSide   <NUMSIDE   ; iSide++  ){
+ 	for (Int_t iModule = 0; iModule <NUMMODULE ; iModule++){
+ 	for (Int_t iBar    = 0; iBar    <NUMBAR    ; iBar++   ){
+ 	for (Int_t iPaddle = 0; iPaddle <NUMPADDLE ; iPaddle++){
+		detID = getDetectorID(iPaddle,iBar,iModule,iSide,iPlane);
+                if (detID >= lowerPaddleNumber && detID <= upperPaddleNumber){
+		if (Detector_id[j+Detector_Offset] == detID+Detector_Offset) {
 		  anabar_hit = true;
-		  anabar_hit_paddle[ibar-1]=true;
+		  anabar_hit_paddle[detID]=true;
 		  j_anabar = j;
 		  //cout << "hit in anabar " << j << endl;
 		}
+		}
+	}
+	}
+	}
+	}
 	}
 	//if (Detector_id[j] == 14 && !anabar_bottom_hit) {
 	//	anabar_bottom_hit = true;
@@ -1209,7 +1652,7 @@ TCanvas *plotC10 (){
 
     //if (finger_hit && anabar_top_hit && anabar_bottom_hit) trigger = true; 
     //if (finger_hit && anabar_top_hit) trigger = true; 
-    if (finger_hit && anabar_hit) trigger = true; 
+    if (finger_hit_top && finger_hit_bot && anabar_hit) trigger = true; 
 
     if (trigger) {
 
@@ -1217,11 +1660,22 @@ TCanvas *plotC10 (){
 		//std::cout << "Processing Finger hit = " << jq << std::endl; 
 		hFingerPMTKE->Fill(1240.0/PMT_KineticEnergy[14][jq]);
 	}
-	for (Int_t iq=1; iq < NUMPADDLE; iq++){
-		for (Int_t jq=0; jq<PMT_Nphotons[iq]; jq++){
+ 	for (Int_t iPlane  = 0; iPlane  <NUMPLANE  ; iPlane++ ){
+ 	for (Int_t iSide   = 0; iSide   <NUMSIDE   ; iSide++  ){
+ 	for (Int_t iModule = 0; iModule <NUMMODULE ; iModule++){
+ 	for (Int_t iBar    = 0; iBar    <NUMBAR    ; iBar++   ){
+ 	for (Int_t iPaddle = 0; iPaddle <NUMPADDLE ; iPaddle++){
+		detID = getDetectorID(iPaddle,iBar,iModule,iSide,iPlane);
+                if (detID >= lowerPaddleNumber && detID <= upperPaddleNumber){
+		for (Int_t jq=0; jq<PMT_Nphotons[detID]; jq++){
 			//std::cout << "Processing Anabar pmt = " << iq << " hit = " << jq << " Energy = " << PMT_KineticEnergy[iq][jq] << std::endl;
-			hAnaBarPMTKEA1->Fill(1240.0/PMT_KineticEnergy[iq][jq]);
+			hAnaBarPMTKEA1->Fill(1240.0/PMT_KineticEnergy[detID][jq]);
 		}
+		}
+	}
+	}
+	}
+	}
 	}
     }
 
@@ -1241,7 +1695,18 @@ TCanvas *plotC10 (){
 }
 
 
-TCanvas *plotC11 (Float_t Photon_Threshold = 8.0){
+TCanvas *plotC11 (Int_t barChoice = -1, Float_t Photon_Threshold = 8.0){
+// This will allow for single bar analysis
+  Int_t lowerPaddleNumber = 0;
+  Int_t upperPaddleNumber = 0;
+  if(barChoice != -1){
+    lowerPaddleNumber = NUMPADDLE*barChoice; 
+    upperPaddleNumber = NUMPADDLE*barChoice + NUMPADDLE -1;
+  }
+  else {
+    lowerPaddleNumber = 0; 
+    upperPaddleNumber = NMaxPMT -1;
+  }
 
   // Histogram
   TH1F *hAnaBarMult = new TH1F("AnaBarMult","Anabar PMT Multiplicity",12,0,12);
@@ -1254,7 +1719,6 @@ TCanvas *plotC11 (Float_t Photon_Threshold = 8.0){
 
   Long64_t counter = 0; // unused
 
-  const int NMaxPMT=14; 
 
   for (Int_t i = 0; i < nentries; i++) { 
 
@@ -1265,26 +1729,45 @@ TCanvas *plotC11 (Float_t Photon_Threshold = 8.0){
     tree1->GetEntry(i); 
 
     bool trigger = false;
-    bool finger_hit = false;
+    bool finger_hit_top = false;
+    bool finger_hit_bot = false;
     bool anabar_hit = false;
     bool anabar_top_hit = false;// unused
     bool anabar_bottom_hit = false; // unused
     int j_finger = 0;
     int j_anabar = 0;
+    Int_t detID = 0;
     for (Int_t j=0; j < Detector_Nhits ; j++) {
 	//cout << "Detector hit = " << j << " Detector_id[j] = " << Detector_id[j] << endl;
-	if (Detector_id[j] == Detector_Offset && !finger_hit) {
-		finger_hit = true;
-		j_finger = j;
-		//cout<<"hit in finger";
+	if(!finger_hit_bot || !finger_hit_top){
+		if(Detector_id[j] == Finger_Offset || Detector_id[j] == Finger_Offset+1){
+			finger_hit_top = true;
+			j_finger = j;
+		}
+		if(Detector_id[j] == Finger_Offset+2 || Detector_id[j] == Finger_Offset+3){
+			finger_hit_bot = true;
+			j_finger = j;
+		}
 	}
-	for (Int_t ibar = 1; ibar<15; ibar++){
-		if (Detector_id[j+Detector_Offset] == ibar+Detector_Offset) {
+ 	for (Int_t iPlane  = 0; iPlane  <NUMPLANE  ; iPlane++ ){
+ 	for (Int_t iSide   = 0; iSide   <NUMSIDE   ; iSide++  ){
+ 	for (Int_t iModule = 0; iModule <NUMMODULE ; iModule++){
+ 	for (Int_t iBar    = 0; iBar    <NUMBAR    ; iBar++   ){
+ 	for (Int_t iPaddle = 0; iPaddle <NUMPADDLE ; iPaddle++){
+		detID = getDetectorID(iPaddle,iBar,iModule,iSide,iPlane);
+                if (detID >= lowerPaddleNumber && detID <= upperPaddleNumber){
+	       Int_t detID = getDetectorID(iPaddle,iBar,iModule,iSide,iPlane);
+		if (Detector_id[j+Detector_Offset] == detID+Detector_Offset) {
 		  anabar_hit = true;
-		  anabar_hit_paddle[ibar-1]=true;
+		  anabar_hit_paddle[detID]=true;
 		  j_anabar = j;
 		  //cout << "hit in anabar " << j << endl;
 		}
+		}
+	}
+	}
+	}
+	}
 	}
 	//if (Detector_id[j] == 14 && !anabar_bottom_hit) {
 	//	anabar_bottom_hit = true;
@@ -1294,16 +1777,38 @@ TCanvas *plotC11 (Float_t Photon_Threshold = 8.0){
 
     //if (finger_hit && anabar_top_hit && anabar_bottom_hit) trigger = true; 
     //if (finger_hit && anabar_top_hit) trigger = true; 
-    if (finger_hit && anabar_hit) trigger = true; 
+    if (finger_hit_top && finger_hit_bot && anabar_hit) trigger = true; 
 
     if (trigger) {
 
-	for (Int_t icount = 0;icount < NUMPADDLE;icount++){
-		PMT_Nphotons_Noise[icount]=PMT_Nphotons[icount]+fRand->Gaus(0.0,pedastel_sigma);
+ 	for (Int_t iPlane  = 0; iPlane  <NUMPLANE  ; iPlane++ ){
+ 	for (Int_t iSide   = 0; iSide   <NUMSIDE   ; iSide++  ){
+ 	for (Int_t iModule = 0; iModule <NUMMODULE ; iModule++){
+ 	for (Int_t iBar    = 0; iBar    <NUMBAR    ; iBar++   ){
+ 	for (Int_t iPaddle = 0; iPaddle <NUMPADDLE ; iPaddle++){
+		detID = getDetectorID(iPaddle,iBar,iModule,iSide,iPlane);
+                if (detID >= lowerPaddleNumber && detID <= upperPaddleNumber){
+		PMT_Nphotons_Noise[detID]=PMT_Nphotons[detID]+fRand->Gaus(0.0,pedastel_sigma);
+		}
+	}
+	}
+	}
+	}
 	}
 	Int_t imult=0;
-	for(Int_t icount=0;icount < NUMPADDLE;icount++){
-		if(PMT_Nphotons_Noise[icount]>=Photon_Threshold) imult++;
+ 	for (Int_t iPlane  = 0; iPlane  <NUMPLANE  ; iPlane++ ){
+ 	for (Int_t iSide   = 0; iSide   <NUMSIDE   ; iSide++  ){
+ 	for (Int_t iModule = 0; iModule <NUMMODULE ; iModule++){
+ 	for (Int_t iBar    = 0; iBar    <NUMBAR    ; iBar++   ){
+ 	for (Int_t iPaddle = 0; iPaddle <NUMPADDLE ; iPaddle++){
+		detID = getDetectorID(iPaddle,iBar,iModule,iSide,iPlane);
+                if (detID >= lowerPaddleNumber && detID <= upperPaddleNumber){
+		if(PMT_Nphotons_Noise[detID]>=Photon_Threshold) imult++;
+		}
+	}
+	}
+	}
+	}
 	}
 	hAnaBarMult->Fill(imult);
     }
@@ -1322,7 +1827,18 @@ TCanvas *plotC11 (Float_t Photon_Threshold = 8.0){
 }
 
 
-TCanvas *plotC12 (){
+TCanvas *plotC12 (Int_t barChoice = -1){
+// This will allow for single bar analysis
+  Int_t lowerPaddleNumber = 0;
+  Int_t upperPaddleNumber = 0;
+  if(barChoice != -1){
+    lowerPaddleNumber = NUMPADDLE*barChoice; 
+    upperPaddleNumber = NUMPADDLE*barChoice + NUMPADDLE -1;
+  }
+  else {
+    lowerPaddleNumber = 0; 
+    upperPaddleNumber = NMaxPMT -1;
+  }
 
   //-------------------------------------------------------------------
   //Create histograms
@@ -1339,7 +1855,6 @@ TCanvas *plotC12 (){
 
   Long64_t counter = 0; // unused
 
-  const int NMaxPMT=14; 
 
   for (Int_t i = 0; i < nentries; i++) { 
 

@@ -96,8 +96,8 @@ void GenCosmics( ULong64_t nevents = 100,
     {
       nTotal++;
       
-      //GenerateOneMuon();
-      GenerateOneElectron();
+      GenerateOneMuon();
+      //GenerateOneElectron();
       fROOTTree->Fill();
       
       if( i % 10 == 0 )
@@ -144,9 +144,9 @@ void GenerateOneMuon()
   fPDGCode = 13;
 
   // Generate vertex position in cm 
-  fVx = fRand->Uniform(-4.5 , 4.5 );
+  fVx = fRand->Uniform(-55.0 , 55.0 );
   fVy = 5.0;
-  fVz = fRand->Uniform( -9.5 , 2.5 );
+  fVz = fRand->Uniform( -9.5 , 125.0 );
   //fVx = fRand->Uniform(-0.01 , 0.01 );
   //fVy = fRand->Uniform( -.01, 0.01 );
   //fVz = 2.0;
@@ -184,7 +184,7 @@ void GenerateOneElectron()
   //fVz = fRand->Uniform( -9.5 , 2.5 );
   fVx = fRand->Uniform(-30.0, 30.0);
   fVy = 5.0;
-  fVz = fRand->Uniform( -12 , 2.5 );
+  fVz = fRand->Uniform( -150 , 2.5 );
 
   // Sample Momentum Distribution (flat top from min to max)
   fP = 1000. * fMomFlatDist->GetRandom();
