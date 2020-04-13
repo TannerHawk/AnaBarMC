@@ -85,7 +85,7 @@ DetectorConstruction::DetectorConstruction()
   //fFingerThickness = 1.7;
   //fFingerZoffset = -1.0;
   fFingerLength = 10.0;
-  fFingerWidth =  fNumberOfLayers*(fAnaBarThickness+2.0*fMylarThickness)+20.0;
+  fFingerWidth = fNumberOfBars*(2.0*fMylarThickness)+fNumberOfBars*fNumberOfLayers*(fAnaBarThickness+2.0*fMylarThickness)+20.0;
   fFingerThickness = 1.0;
   fFingerZoffset = -(fFingerWidth-20.0)/2.0;
   fFingerYoffset = fAnaBarWidth/2.0+fFingerThickness/2.0+1.0;

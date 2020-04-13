@@ -146,7 +146,7 @@ void GenerateOneMuon()
   // Generate vertex position in cm 
   fVx = fRand->Uniform(-55.0 , 55.0 );
   fVy = 5.0;
-  fVz = fRand->Uniform( -9.5 , 125.0 );
+  fVz = fRand->Uniform( -110.0 , 9.5 );
   //fVx = fRand->Uniform(-0.01 , 0.01 );
   //fVy = fRand->Uniform( -.01, 0.01 );
   //fVz = 2.0;
