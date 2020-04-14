@@ -21,6 +21,7 @@
 #include "TText.h"
 #include "TTree.h"
 #include "TGraph.h"
+#include "TGraphErrors.h"
 #include "TMath.h"
 #include "TRandom3.h"
 
@@ -39,7 +40,9 @@ static const Float_t Finger_Edep_Max = 10.0;
 static const Float_t AnaBar_Edep_Max = 10.0;
 //static const Float_t pedastel_sigma = 2.68;
 static const Float_t pedastel_sigma = 2.9;
+//static const Int_t Detector_Offset = -1;
 static const Int_t Detector_Offset = 0;
+static const Int_t Finger_Offset = 2560;
 static const Int_t Finger_NPhotons_Max = 150;
 static const Int_t AnaBar_NPhotons_Max = 200;
 
@@ -56,6 +59,8 @@ static const Int_t ycanvas = 800; // height of canvases
 static const Float_t PEperMeV = 19.02; // photo-electrons per MeV
 static const Float_t MeanEdep = 7.24; // Mean Energy Deposition
 static const Float_t EffDetector = 0.84; // overall efficiency factor
+
+static const Int_t PRIMARYPDG = 13; // change if wanting to analyse a run with electron primaries (PDG=11)
 
 TTree *tree1;
 
@@ -150,7 +155,7 @@ void FitADCSimBrash3(Int_t Analysis_Run_Number = 88811, Int_t runno = 1550, Int_
   //*************** Set up for reading real data ***************//
 
   TString file2;
-  file2.Form("./rootfiles/scint_%d.root",runno);
+  file2.Form("/home/llorenti/CDetOptical/rootfiles/scint_%d.root",runno);
   TFile *_file0 = TFile::Open(file2);
 
   run=runno;
@@ -191,8 +196,9 @@ void FitADCSimBrash3(Int_t Analysis_Run_Number = 88811, Int_t runno = 1550, Int_
 //****************** Functions for simulation plots, for now ********************//
 //*******************************************************************************//
 
-TCanvas *plotC9 (/*Float_t Theta_min_cut = 3.017*/ Float_t Theta_min_cut = 2.524, Float_t Edep_Threshold = 0.0, Int_t Nphot_Neighbor_Cut = 8, Int_t Analyse_Secondaries = 1){
+TCanvas *plotC9 (Int_t barChoice, /*Float_t Theta_min_cut = 3.017*/ Float_t Theta_min_cut = 2.524, Float_t Edep_Threshold = 0.0, Int_t Nphot_Neighbor_Cut = 8, Int_t Analyse_Secondaries = 1){
 
+  Int_t startPaddle = NUMPADDLE*barChoice;
   //-------------------------------------------------------------------
   //Create histograms
   //-------------------------------------------------------------------
@@ -200,8 +206,8 @@ TCanvas *plotC9 (/*Float_t Theta_min_cut = 3.017*/ Float_t Theta_min_cut = 2.524
   TH1F *hAnaBarPMTNphot[NUMPADDLE];
   TString name, title;
   for(Int_t i = 1; i <= NUMPADDLE; i++){
-	name.Form("AnaBarPMTNphotA%d", i);
-	title.Form("AnaBar PMT Number of Photons A%d", i);
+	name.Form("AnaBarPMTNphotA%d", startPaddle+i);
+	title.Form("AnaBar PMT Number of Photons A%d", startPaddle+i);
 	hAnaBarPMTNphot[i-1] = new TH1F(name, title, (AnaBar_NPhotons_Max+20)/4, -20, AnaBar_NPhotons_Max);
   }
 
@@ -209,14 +215,14 @@ TCanvas *plotC9 (/*Float_t Theta_min_cut = 3.017*/ Float_t Theta_min_cut = 2.524
   TH2F *hAnaBarPMTNoiseCutNphotTwo[20];
 
   for (Int_t i = 1; i <= 20; i++){
-	name.Form("AnaBarPMTNoiseCutNphotA%d", i);
-	title.Form("AnaBar PMT Number of Photons A%d", i);
+	name.Form("AnaBarPMTNoiseCutNphotA%d", startPaddle+i);
+	title.Form("AnaBar PMT Number of Photons A%d", startPaddle+i);
 	hAnaBarPMTNoiseCutNphotTwo[i-1] = new TH2F(name, title, (AnaBar_NPhotons_Max+20)/4, -20, AnaBar_NPhotons_Max,(AnaBar_NPhotons_Max+20)/4,-20,AnaBar_NPhotons_Max);
   }
 
   for(Int_t i = 1; i <= NUMPADDLE; i++){
-	name.Form("AnaBarPMTNoiseCutNphotA%d", i);
-	title.Form("AnaBar PMT Number of Photons A%d", i);
+	name.Form("AnaBarPMTNoiseCutNphotA%d", startPaddle+i);
+	title.Form("AnaBar PMT Number of Photons A%d", startPaddle+i);
 	hAnaBarPMTNoiseCutNphot[i-1] = new TH1F(name, title, (AnaBar_NPhotons_Max+20)/4, -20, AnaBar_NPhotons_Max);
 	hAnaBarPMTNoiseCutNphot[i-1]->SetLineColor(kRed);
   }
@@ -264,21 +270,26 @@ TCanvas *plotC9 (/*Float_t Theta_min_cut = 3.017*/ Float_t Theta_min_cut = 2.524
     }
 
     bool trigger = false;
-    bool finger_hit = false;
+    bool finger_hit_top = false;
+    bool finger_hit_bot = false;
     bool anabar_hit = false;
     bool anabar_top_hit = false;// unused
     bool anabar_bottom_hit = false; // unused
     int j_finger = 0;
     int j_anabar = 0;
     for (Int_t j=0; j < Detector_Nhits ; j++) {
-	//cout << "Detector hit = " << j << " Detector_id[j] = " << Detector_id[j] << endl;
-	if (Detector_id[j] == Detector_Offset && !finger_hit) {
-		finger_hit = true;
-		j_finger = j;
-		//cout<<"hit in finger";
+	if(!finger_hit_bot || !finger_hit_top){
+		if(Detector_id[j]== Finger_Offset || Detector_id[j] == Finger_Offset + 1){
+			finger_hit_top = true;
+			j_finger = j;
+		}
+		if(Detector_id[j]== Finger_Offset+2 || Detector_id[j] == Finger_Offset+3){
+			finger_hit_bot = true;
+			j_finger = j;
+		}
 	}
 	for (Int_t ibar = 1; ibar<15; ibar++){
-		if (Detector_id[j+Detector_Offset] == ibar+Detector_Offset) {
+		if (Detector_id[j+Detector_Offset] ==startPaddle+ ibar+Detector_Offset) {
 		  anabar_hit = true;
 		  anabar_hit_paddle[ibar-1]=true;
 		  j_anabar = j;
@@ -294,7 +305,7 @@ TCanvas *plotC9 (/*Float_t Theta_min_cut = 3.017*/ Float_t Theta_min_cut = 2.524
     //if (finger_hit && anabar_top_hit && anabar_bottom_hit) trigger = true; 
     //if (finger_hit && anabar_top_hit) trigger = true; 
     //if (finger_hit && anabar_hit) trigger = true; 
-    if (finger_hit && anabar_hit && fNewTheta > 2.524) trigger = true; 
+    if (finger_hit_top && finger_hit_bot && anabar_hit && fNewTheta > 2.524) trigger = true; 
 
     if (trigger) {
 	good_triggers++;
@@ -308,10 +319,10 @@ TCanvas *plotC9 (/*Float_t Theta_min_cut = 3.017*/ Float_t Theta_min_cut = 2.524
     	for (Int_t j=0; j < Detector_Nhits ; j++) {
 		
 		counter++; // unused
-		if (Detector_id[j] > Detector_Offset && Detector_id[j] <= NMaxPMT+Detector_Offset) {
+		if (Detector_id[j] >startPaddle+ Detector_Offset && Detector_id[j] <=startPaddle+ NMaxPMT+Detector_Offset) {
 			if (Analyse_Secondaries == 1 && fNewTheta > Theta_min_cut) {
 				edeptot[Detector_id[j]-1-Detector_Offset] += Detector_Ed[j];
-			}else{ if (Detector_pdg[j] == 13 && fNewTheta > Theta_min_cut) {
+			}else{ if (Detector_pdg[j] == PRIMARYPDG && fNewTheta > Theta_min_cut) {
 					edeptot[Detector_id[j]-1-Detector_Offset] += Detector_Ed[j];
 		     	       }
 			}
@@ -513,7 +524,7 @@ TCanvas *plotC9 (/*Float_t Theta_min_cut = 3.017*/ Float_t Theta_min_cut = 2.524
   Double_t avgMean;
 
   for(int i = 1; i < NUMPADDLE-1; i++){
-	cout << "Mean PE, paddle " << i + 1 << ": " << means[i] << endl;
+	cout << "Mean PE, paddle " <<startPaddle+ i + 1 << ": " << means[i] << endl;
 
 	meanSum += means[i];
   }
@@ -829,7 +840,7 @@ TCanvas *plot_adc_fit(Int_t pmt=7, Int_t tdc_min=850, Int_t tdc_width=100, Int_t
 	//gStyle->SetCanvasDefH(xcanvas);
 	//gStyle->SetCanvasDefW(ycanvas);
 	//gStyle->SetPalette(1);
-	//gROOT->SetStyle("MyStyle");
+	///gROOT->SetStyle("MyStyle");
 
 
 	// Setting up different arrays and objects used to create the canvases.
