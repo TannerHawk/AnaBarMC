@@ -33,6 +33,8 @@ Changing the Primary Particle
 
 >Change PrimaryParticleID in ~/CDetOptical/AnalyseSignals.C at line 28
 
+>Change PRIMARYPDG in ~/CDetOptical/FitADCSimBrash3.C at line 64
+
 Detector Position and Coordinate Allignment
 
 >X: Length of detector (~50cm for bar(x=-250 to x=250) and ~10cm for trigger paddle(y=-5cm to y=5cm)) 
