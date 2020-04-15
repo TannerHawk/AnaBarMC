@@ -47,7 +47,13 @@ static const Int_t Finger_Offset = 2560;
 static const Int_t Finger_NPhotons_Max = 150;
 static const Int_t AnaBar_NPhotons_Max = 200;
 
+// Simulated Detector Size
 static const Int_t NUMPADDLE = 14;
+static const Int_t NUMBAR    = 14;
+static const Int_t NUMMODULE = 1;
+static const Int_t NUMSIDE   = 1;
+static const Int_t NUMPLANE  = 1;
+// Real-Life Detector Stuff
 static const Int_t NUMPMT = 14;
 static const Int_t NUMPIXEL = 16;
 static const Int_t NUMPADDLES = NUMPMT*NUMPIXEL;
@@ -197,35 +203,60 @@ void FitADCSimBrash3(Int_t Analysis_Run_Number = 88811, Int_t runno = 1550, Int_
 //****************** Functions for simulation plots, for now ********************//
 //*******************************************************************************//
 
-TCanvas *plotC9 (Int_t barChoice, /*Float_t Theta_min_cut = 3.017*/ Float_t Theta_min_cut = 2.524, Float_t Edep_Threshold = 0.0, Int_t Nphot_Neighbor_Cut = 8, Int_t Analyse_Secondaries = 1){
+Int_t getDetectorID(Int_t iLayer, Int_t iBar, Int_t iModule, Int_t iSide, Int_t iPlane){
+  Int_t fDetectorID = 0;
+  fDetectorID = fDetectorID + iLayer;
+  fDetectorID = fDetectorID + iBar*NUMPADDLE; 
+  fDetectorID = fDetectorID + iModule*NUMBAR;
+  fDetectorID = fDetectorID + iSide*NUMMODULE;
+  fDetectorID = fDetectorID + iPlane*NUMSIDE;
+  return fDetectorID;
+}
 
-  Int_t startPaddle = NUMPADDLE*barChoice;
+TCanvas *plotC9 (Int_t barChoice = -1, /*Float_t Theta_min_cut = 3.017*/ Float_t Theta_min_cut = 2.524, Float_t Edep_Threshold = 0.0, Int_t Nphot_Neighbor_Cut = 8, Int_t Analyse_Secondaries = 1){
+// This will allow for single bar analysis
+  Int_t lowerPaddleNumber = 0;
+  Int_t upperPaddleNumber = 0;
+  if(barChoice != -1){
+    lowerPaddleNumber = NUMPADDLE*barChoice; 
+    upperPaddleNumber = NUMPADDLE*barChoice + NUMPADDLE -1;
+  }
+  else {
+	std::cout<<"Only 1 Bar can be analyzed with plotC9() at a time"<<std::endl;
+	return NULL;
+  }
   //-------------------------------------------------------------------
   //Create histograms
   //-------------------------------------------------------------------
-
-  TH1F *hAnaBarPMTNphot[NUMPADDLE];
-  TString name, title;
-  for(Int_t i = 0; i < NUMPADDLE; i++){
-        name.Form("AnaBarPMTNphotA%d", startPaddle+i);
-        title.Form("AnaBar PMT Number of Photons A%d", startPaddle+i);
-        hAnaBarPMTNphot[i] = new TH1F(name, title, (AnaBar_NPhotons_Max+20)/4, -20, AnaBar_NPhotons_Max);
-  }
-  
-  TH1F *hAnaBarPMTNoiseCutNphot[NUMPADDLE];
+ TH1F *hAnaBarPMTNphot[NMaxPMT];
+  TH1F *hAnaBarPMTNoiseCutNphot[NMaxPMT];
   TH2F *hAnaBarPMTNoiseCutNphotTwo[20];
-  
-  for (Int_t i = 0; i < 20; i++){
-        name.Form("AnaBarPMTNoiseCutNphotA%d", startPaddle+i);
-        title.Form("AnaBar PMT Number of Photons A%d", startPaddle+i);
-        hAnaBarPMTNoiseCutNphotTwo[i] = new TH2F(name, title, (AnaBar_NPhotons_Max+20)/4, -20, AnaBar_NPhotons_Max,(AnaBar_NPhotons_Max+20)/4,-20,AnaBar_NPhotons_Max);
+  TString name, title;
+  Int_t detID = 0;
+  for (Int_t iPlane  = 0; iPlane  <NUMPLANE  ; iPlane++ ){
+  for (Int_t iSide   = 0; iSide   <NUMSIDE   ; iSide++  ){
+  for (Int_t iModule = 0; iModule <NUMMODULE ; iModule++){
+  for (Int_t iBar    = 0; iBar    <NUMBAR    ; iBar++   ){
+  for (Int_t iPaddle = 0; iPaddle <NUMPADDLE ; iPaddle++){
+      detID = getDetectorID(iPaddle,iBar,iModule,iSide,iPlane);
+      if (detID >= lowerPaddleNumber && detID <= upperPaddleNumber){
+	name.Form("AnaBarPMTNphotA%d", detID);
+	title.Form("AnaBar PMT Number of Photons A%d", detID);
+	hAnaBarPMTNphot[detID] = new TH1F(name, title, AnaBar_NPhotons_Max+20, -20, AnaBar_NPhotons_Max);
+	name.Form("AnaBarPMTNoiseCutNphotA%d", detID);
+	title.Form("AnaBar PMT Number of Photons A%d", detID);
+	hAnaBarPMTNoiseCutNphot[detID] = new TH1F(name, title, AnaBar_NPhotons_Max+20, -20, AnaBar_NPhotons_Max);
+	hAnaBarPMTNoiseCutNphot[detID]->SetLineColor(kRed);
+ 		}
   }
-  
-  for(Int_t i = 0; i < NUMPADDLE; i++){
-        name.Form("AnaBarPMTNoiseCutNphotA%d", startPaddle+i);
-        title.Form("AnaBar PMT Number of Photons A%d", startPaddle+i);
-        hAnaBarPMTNoiseCutNphot[i] = new TH1F(name, title, (AnaBar_NPhotons_Max+20)/4, -20, AnaBar_NPhotons_Max);
-        hAnaBarPMTNoiseCutNphot[i]->SetLineColor(kRed);
+  }
+  }
+  }
+  }
+  for (Int_t i = 0; i < 20; i++){
+        name.Form("AnaBarPMTNoiseCutNphotA%d", i);
+        title.Form("AnaBar PMT Number of Photons A%d", i);
+        hAnaBarPMTNoiseCutNphotTwo[i] = new TH2F(name, title, (AnaBar_NPhotons_Max+20)/4, -20, AnaBar_NPhotons_Max,(AnaBar_NPhotons_Max+20)/4,-20,AnaBar_NPhotons_Max);
   }
 
   TH1F *hNewTheta = new TH1F("theta","theta",200,3.14159265/2.0,3.14159265);
@@ -236,15 +267,11 @@ TCanvas *plotC9 (Int_t barChoice, /*Float_t Theta_min_cut = 3.017*/ Float_t Thet
   //Event loop
   //-------------------------------------------------------------------
   
-  for (Int_t ibar = 0; ibar<NUMPADDLE; ibar++){
-  	std::cout<<startPaddle+ ibar+Detector_Offset<<std::endl; 
-  }
-std::cout<<"Detector_id min >= "<<startPaddle+ Detector_Offset<<" Detector_id max <"<<startPaddle+ 14+Detector_Offset<<std::endl;
   Long64_t nentries = tree1->GetEntries();
 
   Long64_t counter = 0; // unused
 
-  const int NMaxPMT=14; 
+  const int NMaxPMT=196; 
   float edeptot[NMaxPMT]; 
 
   cout << "Number of Entries = " << nentries << endl;
@@ -282,6 +309,7 @@ std::cout<<"Detector_id min >= "<<startPaddle+ Detector_Offset<<" Detector_id ma
     bool anabar_bottom_hit = false; // unused
     int j_finger = 0;
     int j_anabar = 0;
+    Int_t detID = 0;
     for (Int_t j=0; j < Detector_Nhits ; j++) {
 	if(!finger_hit_bot || !finger_hit_top){
 		if(Detector_id[j]== Finger_Offset || Detector_id[j] == Finger_Offset + 1){
@@ -293,39 +321,55 @@ std::cout<<"Detector_id min >= "<<startPaddle+ Detector_Offset<<" Detector_id ma
 			j_finger = j;
 		}
 	}
-	for (Int_t ibar = 0; ibar<NUMPADDLE; ibar++){
-		if (Detector_id[j+Detector_Offset] ==startPaddle+ ibar+Detector_Offset) {
+
+ 	for (Int_t iPlane  = 0; iPlane  <NUMPLANE  ; iPlane++ ){
+ 	for (Int_t iSide   = 0; iSide   <NUMSIDE   ; iSide++  ){
+ 	for (Int_t iModule = 0; iModule <NUMMODULE ; iModule++){
+ 	for (Int_t iBar    = 0; iBar    <NUMBAR    ; iBar++   ){
+ 	for (Int_t iPaddle = 0; iPaddle <NUMPADDLE ; iPaddle++){
+		detID = getDetectorID(iPaddle,iBar,iModule,iSide,iPlane);
+                if (detID >= lowerPaddleNumber && detID <= upperPaddleNumber){
+		if (Detector_id[j+Detector_Offset] == detID+Detector_Offset) {
 		  anabar_hit = true;
-		  anabar_hit_paddle[ibar]=true;
+		  anabar_hit_paddle[detID]=true;
 		  j_anabar = j;
 		  //cout << "hit in anabar " << j << endl;
 		}
+		}
 	}
-	//if (Detector_id[j] == 14 && !anabar_bottom_hit) {
-	//	anabar_bottom_hit = true;
-	//	j_anabar = j;
-	//}
+	}
+	}
+	}
+	}
     }
-
-    //if (finger_hit && anabar_top_hit && anabar_bottom_hit) trigger = true; 
-    //if (finger_hit && anabar_top_hit) trigger = true; 
-    //if (finger_hit && anabar_hit) trigger = true; 
     if (finger_hit_top && finger_hit_bot && anabar_hit && fNewTheta > 2.524) trigger = true; 
 
     if (trigger) {
 	good_triggers++;
 
-	for (Int_t icount = 0;icount < NUMPADDLE;icount++){
-		PMT_Nphotons_Noise[icount]=PMT_Nphotons[icount]+fRand->Gaus(0.0,pedastel_sigma);
+	for (Int_t iPlane  = 0; iPlane  <NUMPLANE  ; iPlane++ ){
+ 	for (Int_t iSide   = 0; iSide   <NUMSIDE   ; iSide++  ){
+ 	for (Int_t iModule = 0; iModule <NUMMODULE ; iModule++){
+ 	for (Int_t iBar    = 0; iBar    <NUMBAR    ; iBar++   ){
+ 	for (Int_t iPaddle = 0; iPaddle <NUMPADDLE ; iPaddle++){
+		detID = getDetectorID(iPaddle,iBar,iModule,iSide,iPlane);
+                if (detID >= lowerPaddleNumber && detID <= upperPaddleNumber){
+		PMT_Nphotons_Noise[detID]=PMT_Nphotons[detID]+fRand->Gaus(0.0,pedastel_sigma);
 		//PMT_Nphotons_Noise[icount]=PMT_Nphotons[icount];
-		hAnaBarPMTNphot[icount]->Fill(PMT_Nphotons_Noise[icount]);
+		hAnaBarPMTNphot[detID]->Fill(PMT_Nphotons_Noise[detID]);
+		}
+	}
+	}
+	}
+	}
 	}
 
     	for (Int_t j=0; j < Detector_Nhits ; j++) {
 		
 		counter++; // unused
 		// These lines which depend on Detector_Offset are a bit wonky...Right now Detector_Offset = 0
-		if (Detector_id[j] >=startPaddle+ Detector_Offset && Detector_id[j] <startPaddle+ NMaxPMT+Detector_Offset) {
+		
+		if (Detector_id[j] > Detector_Offset && Detector_id[j] <= NMaxPMT+Detector_Offset) {
 			if (Analyse_Secondaries == 1 && fNewTheta > Theta_min_cut) {
 				edeptot[Detector_id[j]] += Detector_Ed[j];
 			}else{ if (Detector_pdg[j] == PRIMARYPDG && fNewTheta > Theta_min_cut) {
@@ -342,27 +386,37 @@ std::cout<<"Detector_id min >= "<<startPaddle+ Detector_Offset<<" Detector_id ma
                     if (PMT_Nphotons_Noise[pixel_mainsim[i]-1] > Nphot_Neighbor_Cut) hAnaBarPMTNoiseCutNphotTwo[i]->Fill(PMT_Nphotons_Noise[pixel_mainsim[i]-1],PMT_Nphotons_Noise[pixel_nnsim[i]-1]);
                 }
         }
-
-	for (Int_t i = 0; i < NUMPADDLE; i++){
-		if(anabar_hit_paddle[i]&&edeptot[i]>=Edep_Threshold && fNewTheta > Theta_min_cut){
-		    if(i == 0){
-			if(PMT_Nphotons_Noise[i+1] < Nphot_Neighbor_Cut)
-			    hAnaBarPMTNoiseCutNphot[i]->Fill(PMT_Nphotons_Noise[i]);
+ 	for (Int_t iPlane  = 0; iPlane  <NUMPLANE  ; iPlane++ ){
+ 	for (Int_t iSide   = 0; iSide   <NUMSIDE   ; iSide++  ){
+ 	for (Int_t iModule = 0; iModule <NUMMODULE ; iModule++){
+ 	for (Int_t iBar    = 0; iBar    <NUMBAR    ; iBar++   ){
+ 	for (Int_t iPaddle = 0; iPaddle <NUMPADDLE ; iPaddle++){
+		detID = getDetectorID(iPaddle,iBar,iModule,iSide,iPlane);
+                if (detID >= lowerPaddleNumber && detID <= upperPaddleNumber){
+		if(anabar_hit_paddle[detID]&&edeptot[detID]>=Edep_Threshold && fNewTheta > Theta_min_cut){
+		    if(detID == lowerPaddleNumber){
+			if(PMT_Nphotons_Noise[detID+1] < Nphot_Neighbor_Cut)
+			    hAnaBarPMTNoiseCutNphot[detID]->Fill(PMT_Nphotons_Noise[detID]);
 		    }
-		    else if(i == NUMPADDLE - 1){
-			if(PMT_Nphotons_Noise[i-1] < Nphot_Neighbor_Cut)
-			    hAnaBarPMTNoiseCutNphot[i]->Fill(PMT_Nphotons_Noise[i]);
+		    else if(detID == upperPaddleNumber){
+			if(PMT_Nphotons_Noise[detID-1] < Nphot_Neighbor_Cut)
+			    hAnaBarPMTNoiseCutNphot[detID]->Fill(PMT_Nphotons_Noise[detID]);
 		    }
 		    else {
-			if(PMT_Nphotons_Noise[i-1] < Nphot_Neighbor_Cut && PMT_Nphotons_Noise[i+1] < Nphot_Neighbor_Cut){
-			    hAnaBarPMTNoiseCutNphot[i]->Fill(PMT_Nphotons_Noise[i]);
-			    if(PMT_Nphotons_Noise[i] > 5.0*Nphot_Neighbor_Cut) {
+			if(PMT_Nphotons_Noise[detID-1] < Nphot_Neighbor_Cut && PMT_Nphotons_Noise[detID+1] < Nphot_Neighbor_Cut){
+			    hAnaBarPMTNoiseCutNphot[detID]->Fill(PMT_Nphotons_Noise[detID]);
+			    if(PMT_Nphotons_Noise[detID] > 5.0*Nphot_Neighbor_Cut) {
 				hNewThetaCut->Fill(fNewTheta);
 				hNewThetaPhiCut->Fill(fNewTheta,fNewPhi);
 			    }
 			}
 		    }
 		}
+		}
+	}
+	}
+	}
+	}
 	}
     }
 
@@ -390,13 +444,13 @@ std::cout<<"Detector_id min >= "<<startPaddle+ Detector_Offset<<" Detector_id ma
   Double_t SNRPeak, SNRFWHM;
 
   TF1 *fcn;
-  Double_t constants[NUMPADDLE], means[NUMPADDLE], sigmas[NUMPADDLE], meanErr[NUMPADDLE], sigErr[NUMPADDLE];
-  Double_t res[NUMPADDLE], resErr[NUMPADDLE];
-  Double_t counts[NUMPADDLE], countsErr[NUMPADDLE];
-  Double_t upaddle[NUMPADDLE] = {1,2,3,4,5,6,7,8,9,10,11,12,13,14};
-  Double_t epaddle[NUMPADDLE] = {0,0,0,0,0,0,0,0,0,0,0,0,0,0};
+  Double_t constants[NMaxPMT], means[NMaxPMT], sigmas[NMaxPMT], meanErr[NMaxPMT], sigErr[NMaxPMT];
+  Double_t res[NMaxPMT], resErr[NMaxPMT];
+  Double_t counts[NMaxPMT], countsErr[NMaxPMT];
+  Double_t upaddle[NMaxPMT] = {1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25,26,27,28,29,30,31,32,33,34,35,36,37,38,39,40,41,42,43,44,45,46,47,48,49,50,51,52,53,54,55,56,57,58,59,60,61,62,63,64,65,66,67,68,69,70,71,72,73,74,75,76,77,78,79,80,81,82,83,84,85,86,87,88,89,90,91,92,93,94,95,96,97,98,99,100,101,102,103,104,105,106,107,108,109,110,111,112,113,114,115,116,117,118,119,120,121,122,123,124,125,126,127,128,129,130,131,132,133,134,135,136,137,138,139,140,141,142,143,144,145,146,147,148,149,150,151,152,153,154,155,156,157,158,159,160,161,162,163,164,165,166,167,168,169,170,171,172,173,174,175,176,177,178,179,180,181,182,183,184,185,186,187,188,189,190,191,192,193,194,195,196};
+  Double_t epaddle[NMaxPMT] = {0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0};
 
-  Double_t numEntries[NUMPADDLE];
+  Double_t numEntries[NMaxPMT];
 
   cPECross1->Clear();
   cPECross2->Clear();
@@ -416,16 +470,22 @@ std::cout<<"Detector_id min >= "<<startPaddle+ Detector_Offset<<" Detector_id ma
 
   TCanvas* cHistos = new TCanvas("cHistos", "cHistos",600,50,800,500);
   cHistos->Divide(4,4);
-
-  for (Int_t i = 0; i < NUMPADDLE; i++){
-std::cout<<"Fitting Paddle "<<i<<" of "<<NUMPADDLE-1<<std::endl;
+	
+  for (Int_t iPlane  = 0; iPlane  <NUMPLANE  ; iPlane++ ){
+  for (Int_t iSide   = 0; iSide   <NUMSIDE   ; iSide++  ){
+  for (Int_t iModule = 0; iModule <NUMMODULE ; iModule++){
+  for (Int_t iBar    = 0; iBar    <NUMBAR    ; iBar++   ){
+  for (Int_t iPaddle = 0; iPaddle <NUMPADDLE ; iPaddle++){	  
+	detID = getDetectorID(iPaddle,iBar,iModule,iSide,iPlane);
+        if (detID >= lowerPaddleNumber && detID <= upperPaddleNumber){
+std::cout<<"Fitting Paddle "<<detID<<" of "<<upperPaddleNumber<<std::endl;
 		
-        cADCToPE->cd(i+1);
+        cADCToPE->cd(detID-lowerPaddleNumber+1);
   	gPad->SetLogy();
   	//hAnaBarPMTNphot[i]->Draw();
- 	hAnaBarPMTNoiseCutNphot[i]->Draw("SAME");
+ 	hAnaBarPMTNoiseCutNphot[detID]->Draw("SAME");
 
-	numEntries[i] = hAnaBarPMTNoiseCutNphot[i]->GetEntries();
+	numEntries[detID] = hAnaBarPMTNoiseCutNphot[detID]->GetEntries();
 
 
 	Double_t bc =0.0;
@@ -438,9 +498,9 @@ std::cout<<"Fitting Paddle "<<i<<" of "<<NUMPADDLE-1<<std::endl;
 	//hAnaBarPMTNoiseCutNphot[i]->Fit(gfit, "R+");
 
     	for (Int_t j=0.2*nbin; j< nbin ;j++){ // find minimum between pedestal and peak to start the gaussian fit
-	  bc = hAnaBarPMTNoiseCutNphot[i]->GetBinContent(j);
-	  if( bc == 0.0 || (bc <hAnaBarPMTNoiseCutNphot[i]->GetBinContent(j+1) && bc < hAnaBarPMTNoiseCutNphot[i]->GetBinContent(j+2) && bc <hAnaBarPMTNoiseCutNphot[i]->GetBinContent(j-1) && bc <hAnaBarPMTNoiseCutNphot[i]->GetBinContent(j-2) && bc <hAnaBarPMTNoiseCutNphot[i]->GetBinContent(j-3) && bc <hAnaBarPMTNoiseCutNphot[i]->GetBinContent(j-4))  ){
-	    bn = hAnaBarPMTNoiseCutNphot[i]->GetBinCenter(j);
+	  bc = hAnaBarPMTNoiseCutNphot[detID]->GetBinContent(j);
+	  if( bc == 0.0 || (bc <hAnaBarPMTNoiseCutNphot[detID]->GetBinContent(j+1) && bc < hAnaBarPMTNoiseCutNphot[detID]->GetBinContent(j+2) && bc <hAnaBarPMTNoiseCutNphot[detID]->GetBinContent(j-1) && bc <hAnaBarPMTNoiseCutNphot[detID]->GetBinContent(j-2) && bc <hAnaBarPMTNoiseCutNphot[detID]->GetBinContent(j-3) && bc <hAnaBarPMTNoiseCutNphot[detID]->GetBinContent(j-4))  ){
+	    bn = hAnaBarPMTNoiseCutNphot[detID]->GetBinCenter(j);
 	    cout << "Min between pedestal and peak: " << bn << endl;
 	    break;
 	  }
@@ -448,8 +508,8 @@ std::cout<<"Fitting Paddle "<<i<<" of "<<NUMPADDLE-1<<std::endl;
 
 	Double_t par[3];
 	TF1 *g1 = new TF1("g1", "gaus", min, bn);
-	hAnaBarPMTNoiseCutNphot[i]->Fit(g1,"R");
-	fcn = hAnaBarPMTNoiseCutNphot[i]->GetFunction("g1");
+	hAnaBarPMTNoiseCutNphot[detID]->Fit(g1,"R");
+	fcn = hAnaBarPMTNoiseCutNphot[detID]->GetFunction("g1");
 	if (fcn) fcn->SetLineColor(1);
 	if (fcn) cout << "Fitting pedestal" << endl;
 
@@ -460,35 +520,44 @@ std::cout<<"The blow is: "<<blow<<" and the max is: "<<max<<std::endl;
 	// This is to fix weird pedestal sigma?
 	if(blow>150.0) blow = 100.0;
 
-	hAnaBarPMTNoiseCutNphot[i]->Fit(g2, "R+");
+	hAnaBarPMTNoiseCutNphot[detID]->Fit(g2, "R+");
 
-	fcn = hAnaBarPMTNoiseCutNphot[i]->GetFunction("g2");
+	fcn = hAnaBarPMTNoiseCutNphot[detID]->GetFunction("g2");
 	if (fcn) fcn->SetLineColor(1);
 	if (fcn) cout << "Fitting peak" << endl;
 
-	if (fcn) means[i] = fcn->GetParameter(1);
-	if (fcn) sigmas[i] = fcn->GetParameter(2);
-	if (fcn) constants[i] = fcn->GetParameter(0);
-	if (fcn) meanErr[i] = fcn->GetParError(1);
-	if (fcn) sigErr[i] = fcn->GetParError(2);
+	if (fcn) means[detID] = fcn->GetParameter(1);
+	if (fcn) sigmas[detID] = fcn->GetParameter(2);
+	if (fcn) constants[detID] = fcn->GetParameter(0);
+	if (fcn) meanErr[detID] = fcn->GetParError(1);
+	if (fcn) sigErr[detID] = fcn->GetParError(2);
 
-	cHistos->cd(i+1);
-	hAnaBarPMTNoiseCutNphot[i]->Draw();
-
-//  	fr[0]=0.7*hAnaBarPMTNphot[i]->GetMean();
-//  	fr[1]=25.0*hAnaBarPMTNphot[i]->GetMean();
-//  	TF1 *fitsnr = langaufit(hAnaBarPMTNphot[i],fr,sv,pllo,plhi,fp,fpe,&chisqr,&ndf);
-//  	langaupro(fp,SNRPeak,SNRFWHM);
-//  	fitsnr->Draw("SAME");
+	cHistos->cd(detID-lowerPaddleNumber+1);
+	hAnaBarPMTNoiseCutNphot[detID]->Draw();
+	}
+  }
+  }
+  }
+  }
   }
 
 
-  for(Int_t i = 0; i < NUMPADDLE; i++) {
-	
-	res[i] = sigmas[i]/means[i];
-	resErr[i] = res[i] * TMath::Sqrt( (meanErr[i]*meanErr[i])/(means[i]*means[i]) + (sigErr[i]*sigErr[i])/(sigmas[i]*sigmas[i]) );
-	counts[i] = constants[i]*sqrt(2.0*3.14159265)*sigmas[i];
-	countsErr[i] = sqrt(counts[i]); 
+  for (Int_t iPlane  = 0; iPlane  <NUMPLANE  ; iPlane++ ){
+  for (Int_t iSide   = 0; iSide   <NUMSIDE   ; iSide++  ){
+  for (Int_t iModule = 0; iModule <NUMMODULE ; iModule++){
+  for (Int_t iBar    = 0; iBar    <NUMBAR    ; iBar++   ){
+  for (Int_t iPaddle = 0; iPaddle <NUMPADDLE ; iPaddle++){
+		detID = getDetectorID(iPaddle,iBar,iModule,iSide,iPlane);
+                if (detID >= lowerPaddleNumber && detID <= upperPaddleNumber){	
+	res[detID] = sigmas[detID]/means[detID];
+	resErr[detID] = res[detID] * TMath::Sqrt( (meanErr[detID]*meanErr[detID])/(means[detID]*means[detID]) + (sigErr[detID]*sigErr[detID])/(sigmas[detID]*sigmas[detID]) );
+	counts[detID] = constants[detID]*sqrt(2.0*3.14159265)*sigmas[detID];
+	countsErr[detID] = sqrt(counts[detID]); 
+		}
+  }
+  }
+  }
+  }
   }
 
   cSimFitRes->cd();
@@ -528,10 +597,20 @@ std::cout<<"The blow is: "<<blow<<" and the max is: "<<max<<std::endl;
   Double_t meanSum = 0.0;
   Double_t avgMean;
 
-  for(int i = 0; i < NUMPADDLE; i++){
-	cout << "Mean PE, paddle " <<startPaddle+ i << ": " << means[i] << endl;
-
-	meanSum += means[i];
+  for (Int_t iPlane  = 0; iPlane  <NUMPLANE  ; iPlane++ ){
+  for (Int_t iSide   = 0; iSide   <NUMSIDE   ; iSide++  ){
+  for (Int_t iModule = 0; iModule <NUMMODULE ; iModule++){
+  for (Int_t iBar    = 0; iBar    <NUMBAR    ; iBar++   ){
+  for (Int_t iPaddle = 0; iPaddle <NUMPADDLE ; iPaddle++){
+		detID = getDetectorID(iPaddle,iBar,iModule,iSide,iPlane);
+                if (detID >= lowerPaddleNumber && detID <= upperPaddleNumber){
+	cout << "Mean PE, paddle " <<detID << ": " << means[detID] << endl;
+	meanSum += means[detID];
+		}
+  }
+  }
+  }
+  }
   }
   avgMean = meanSum/(NUMPADDLE);
   cout << "Avg. mean PE: " << avgMean << endl;
