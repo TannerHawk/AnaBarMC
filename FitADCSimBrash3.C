@@ -40,8 +40,9 @@ static const Float_t Finger_Edep_Max = 10.0;
 static const Float_t AnaBar_Edep_Max = 10.0;
 //static const Float_t pedastel_sigma = 2.68;
 static const Float_t pedastel_sigma = 2.9;
-//static const Int_t Detector_Offset = -1;
-static const Int_t Detector_Offset = 0;
+// the number before the first paddle id starts
+static const Int_t Detector_Offset = -1;
+// the number the first finger id starts
 static const Int_t Finger_Offset = 2560;
 static const Int_t Finger_NPhotons_Max = 150;
 static const Int_t AnaBar_NPhotons_Max = 200;
@@ -235,6 +236,9 @@ TCanvas *plotC9 (Int_t barChoice, /*Float_t Theta_min_cut = 3.017*/ Float_t Thet
   //Event loop
   //-------------------------------------------------------------------
   
+  for (Int_t ibar = 1; ibar<15; ibar++){
+  	std::cout<<startPaddle+ ibar+Detector_Offset<<std::endl; 
+  }
   Long64_t nentries = tree1->GetEntries();
 
   Long64_t counter = 0; // unused
@@ -409,6 +413,7 @@ TCanvas *plotC9 (Int_t barChoice, /*Float_t Theta_min_cut = 3.017*/ Float_t Thet
   }
 
   for (Int_t i = 0; i < NUMPADDLE; i++){
+std::cout<<"Fitting Paddle "<<i<<" of "<<NUMPADDLE-1<<std::endl;
 		
         cADCToPE->cd(i+1);
   	gPad->SetLogy();
@@ -445,6 +450,7 @@ TCanvas *plotC9 (Int_t barChoice, /*Float_t Theta_min_cut = 3.017*/ Float_t Thet
 	g1->GetParameters(&par[0]);
 	Double_t blow = par[1]+20.0*par[2];
 	TF1 *g2 = new TF1("g2","gaus",blow, max);
+std::cout<<"The blow is: "<<blow<<" and the max is: "<<max<<std::endl;
 
 	hAnaBarPMTNoiseCutNphot[i]->Fit(g2, "R+");
 
@@ -473,15 +479,6 @@ TCanvas *plotC9 (Int_t barChoice, /*Float_t Theta_min_cut = 3.017*/ Float_t Thet
 	counts[i] = constants[i]*sqrt(2.0*3.14159265)*sigmas[i];
 	countsErr[i] = sqrt(counts[i]); 
   }
-
-  res[0]=0.0;
-  res[NUMPADDLE-1]=0.0;
-  resErr[0]=0.0;
-  resErr[NUMPADDLE-1]=0.0;
-  counts[0]=0.0;
-  counts[NUMPADDLE-1]=0.0;
-  countsErr[0]=0.0;
-  countsErr[NUMPADDLE-1]=0.0;
 
   cSimFitRes->cd();
 
@@ -516,19 +513,16 @@ TCanvas *plotC9 (Int_t barChoice, /*Float_t Theta_min_cut = 3.017*/ Float_t Thet
   hNewThetaPhiCut->Draw("COLZ");
   cThetaPhi->Update();
 
-//  for(int i = 0; i < NUMPADDLE; i++){
-//	cout << "Num entries in AnaBarPMTNoiseCutNphot histogram " << i + 1 << ": " << numEntries[i] << endl;
-//  }
 
   Double_t meanSum = 0.0;
   Double_t avgMean;
 
-  for(int i = 1; i < NUMPADDLE-1; i++){
+  for(int i = 0; i < NUMPADDLE; i++){
 	cout << "Mean PE, paddle " <<startPaddle+ i + 1 << ": " << means[i] << endl;
 
 	meanSum += means[i];
   }
-  avgMean = meanSum/(NUMPADDLE-2);
+  avgMean = meanSum/(NUMPADDLE);
   cout << "Avg. mean PE: " << avgMean << endl;
 
 
