@@ -41,7 +41,7 @@ static const Float_t AnaBar_Edep_Max = 10.0;
 //static const Float_t pedastel_sigma = 2.68;
 static const Float_t pedastel_sigma = 2.9;
 // the number before the first paddle id starts
-static const Int_t Detector_Offset = -1;
+static const Int_t Detector_Offset = 0;
 // the number the first finger id starts
 static const Int_t Finger_Offset = 2560;
 static const Int_t Finger_NPhotons_Max = 150;
@@ -206,26 +206,26 @@ TCanvas *plotC9 (Int_t barChoice, /*Float_t Theta_min_cut = 3.017*/ Float_t Thet
 
   TH1F *hAnaBarPMTNphot[NUMPADDLE];
   TString name, title;
-  for(Int_t i = 1; i <= NUMPADDLE; i++){
-	name.Form("AnaBarPMTNphotA%d", startPaddle+i);
-	title.Form("AnaBar PMT Number of Photons A%d", startPaddle+i);
-	hAnaBarPMTNphot[i-1] = new TH1F(name, title, (AnaBar_NPhotons_Max+20)/4, -20, AnaBar_NPhotons_Max);
+  for(Int_t i = 0; i < NUMPADDLE; i++){
+        name.Form("AnaBarPMTNphotA%d", startPaddle+i);
+        title.Form("AnaBar PMT Number of Photons A%d", startPaddle+i);
+        hAnaBarPMTNphot[i] = new TH1F(name, title, (AnaBar_NPhotons_Max+20)/4, -20, AnaBar_NPhotons_Max);
   }
-
+  
   TH1F *hAnaBarPMTNoiseCutNphot[NUMPADDLE];
   TH2F *hAnaBarPMTNoiseCutNphotTwo[20];
-
-  for (Int_t i = 1; i <= 20; i++){
-	name.Form("AnaBarPMTNoiseCutNphotA%d", startPaddle+i);
-	title.Form("AnaBar PMT Number of Photons A%d", startPaddle+i);
-	hAnaBarPMTNoiseCutNphotTwo[i-1] = new TH2F(name, title, (AnaBar_NPhotons_Max+20)/4, -20, AnaBar_NPhotons_Max,(AnaBar_NPhotons_Max+20)/4,-20,AnaBar_NPhotons_Max);
+  
+  for (Int_t i = 0; i < 20; i++){
+        name.Form("AnaBarPMTNoiseCutNphotA%d", startPaddle+i);
+        title.Form("AnaBar PMT Number of Photons A%d", startPaddle+i);
+        hAnaBarPMTNoiseCutNphotTwo[i] = new TH2F(name, title, (AnaBar_NPhotons_Max+20)/4, -20, AnaBar_NPhotons_Max,(AnaBar_NPhotons_Max+20)/4,-20,AnaBar_NPhotons_Max);
   }
-
-  for(Int_t i = 1; i <= NUMPADDLE; i++){
-	name.Form("AnaBarPMTNoiseCutNphotA%d", startPaddle+i);
-	title.Form("AnaBar PMT Number of Photons A%d", startPaddle+i);
-	hAnaBarPMTNoiseCutNphot[i-1] = new TH1F(name, title, (AnaBar_NPhotons_Max+20)/4, -20, AnaBar_NPhotons_Max);
-	hAnaBarPMTNoiseCutNphot[i-1]->SetLineColor(kRed);
+  
+  for(Int_t i = 0; i < NUMPADDLE; i++){
+        name.Form("AnaBarPMTNoiseCutNphotA%d", startPaddle+i);
+        title.Form("AnaBar PMT Number of Photons A%d", startPaddle+i);
+        hAnaBarPMTNoiseCutNphot[i] = new TH1F(name, title, (AnaBar_NPhotons_Max+20)/4, -20, AnaBar_NPhotons_Max);
+        hAnaBarPMTNoiseCutNphot[i]->SetLineColor(kRed);
   }
 
   TH1F *hNewTheta = new TH1F("theta","theta",200,3.14159265/2.0,3.14159265);
@@ -236,9 +236,10 @@ TCanvas *plotC9 (Int_t barChoice, /*Float_t Theta_min_cut = 3.017*/ Float_t Thet
   //Event loop
   //-------------------------------------------------------------------
   
-  for (Int_t ibar = 1; ibar<15; ibar++){
+  for (Int_t ibar = 0; ibar<NUMPADDLE; ibar++){
   	std::cout<<startPaddle+ ibar+Detector_Offset<<std::endl; 
   }
+std::cout<<"Detector_id min >= "<<startPaddle+ Detector_Offset<<" Detector_id max <"<<startPaddle+ 14+Detector_Offset<<std::endl;
   Long64_t nentries = tree1->GetEntries();
 
   Long64_t counter = 0; // unused
@@ -292,10 +293,10 @@ TCanvas *plotC9 (Int_t barChoice, /*Float_t Theta_min_cut = 3.017*/ Float_t Thet
 			j_finger = j;
 		}
 	}
-	for (Int_t ibar = 1; ibar<15; ibar++){
+	for (Int_t ibar = 0; ibar<NUMPADDLE; ibar++){
 		if (Detector_id[j+Detector_Offset] ==startPaddle+ ibar+Detector_Offset) {
 		  anabar_hit = true;
-		  anabar_hit_paddle[ibar-1]=true;
+		  anabar_hit_paddle[ibar]=true;
 		  j_anabar = j;
 		  //cout << "hit in anabar " << j << endl;
 		}
@@ -323,11 +324,12 @@ TCanvas *plotC9 (Int_t barChoice, /*Float_t Theta_min_cut = 3.017*/ Float_t Thet
     	for (Int_t j=0; j < Detector_Nhits ; j++) {
 		
 		counter++; // unused
-		if (Detector_id[j] >startPaddle+ Detector_Offset && Detector_id[j] <=startPaddle+ NMaxPMT+Detector_Offset) {
+		// These lines which depend on Detector_Offset are a bit wonky...Right now Detector_Offset = 0
+		if (Detector_id[j] >=startPaddle+ Detector_Offset && Detector_id[j] <startPaddle+ NMaxPMT+Detector_Offset) {
 			if (Analyse_Secondaries == 1 && fNewTheta > Theta_min_cut) {
-				edeptot[Detector_id[j]-1-Detector_Offset] += Detector_Ed[j];
+				edeptot[Detector_id[j]] += Detector_Ed[j];
 			}else{ if (Detector_pdg[j] == PRIMARYPDG && fNewTheta > Theta_min_cut) {
-					edeptot[Detector_id[j]-1-Detector_Offset] += Detector_Ed[j];
+					edeptot[Detector_id[j]] += Detector_Ed[j];
 		     	       }
 			}
 		}
@@ -376,7 +378,7 @@ TCanvas *plotC9 (Int_t barChoice, /*Float_t Theta_min_cut = 3.017*/ Float_t Thet
   TCanvas *cTheta = new TCanvas("cTheta", "cTheta", 600,100,800,500);
   TCanvas *cThetaPhi = new TCanvas("cThetaPhi", "cThetaPhi", 600,100,800,500);
 
-  printf("Fittingi A1 ...\n"); 
+  printf("Fitting A1 ...\n"); 
   // Setting fit range and start values
   Double_t fr[2];
   Double_t sv[4], pllo[4], plhi[4], fp[4], fpe[4];
@@ -412,6 +414,9 @@ TCanvas *plotC9 (Int_t barChoice, /*Float_t Theta_min_cut = 3.017*/ Float_t Thet
  	hAnaBarPMTNoiseCutNphotTwo[i]->Draw("COLZ");
   }
 
+  TCanvas* cHistos = new TCanvas("cHistos", "cHistos",600,50,800,500);
+  cHistos->Divide(4,4);
+
   for (Int_t i = 0; i < NUMPADDLE; i++){
 std::cout<<"Fitting Paddle "<<i<<" of "<<NUMPADDLE-1<<std::endl;
 		
@@ -421,6 +426,7 @@ std::cout<<"Fitting Paddle "<<i<<" of "<<NUMPADDLE-1<<std::endl;
  	hAnaBarPMTNoiseCutNphot[i]->Draw("SAME");
 
 	numEntries[i] = hAnaBarPMTNoiseCutNphot[i]->GetEntries();
+
 
 	Double_t bc =0.0;
 	Double_t bn = 0.0;
@@ -451,6 +457,8 @@ std::cout<<"Fitting Paddle "<<i<<" of "<<NUMPADDLE-1<<std::endl;
 	Double_t blow = par[1]+20.0*par[2];
 	TF1 *g2 = new TF1("g2","gaus",blow, max);
 std::cout<<"The blow is: "<<blow<<" and the max is: "<<max<<std::endl;
+	// This is to fix weird pedestal sigma?
+	if(blow>150.0) blow = 100.0;
 
 	hAnaBarPMTNoiseCutNphot[i]->Fit(g2, "R+");
 
@@ -464,6 +472,8 @@ std::cout<<"The blow is: "<<blow<<" and the max is: "<<max<<std::endl;
 	if (fcn) meanErr[i] = fcn->GetParError(1);
 	if (fcn) sigErr[i] = fcn->GetParError(2);
 
+	cHistos->cd(i+1);
+	hAnaBarPMTNoiseCutNphot[i]->Draw();
 
 //  	fr[0]=0.7*hAnaBarPMTNphot[i]->GetMean();
 //  	fr[1]=25.0*hAnaBarPMTNphot[i]->GetMean();
@@ -471,6 +481,7 @@ std::cout<<"The blow is: "<<blow<<" and the max is: "<<max<<std::endl;
 //  	langaupro(fp,SNRPeak,SNRFWHM);
 //  	fitsnr->Draw("SAME");
   }
+
 
   for(Int_t i = 0; i < NUMPADDLE; i++) {
 	
@@ -518,7 +529,7 @@ std::cout<<"The blow is: "<<blow<<" and the max is: "<<max<<std::endl;
   Double_t avgMean;
 
   for(int i = 0; i < NUMPADDLE; i++){
-	cout << "Mean PE, paddle " <<startPaddle+ i + 1 << ": " << means[i] << endl;
+	cout << "Mean PE, paddle " <<startPaddle+ i << ": " << means[i] << endl;
 
 	meanSum += means[i];
   }
